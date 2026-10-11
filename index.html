@@ -1,0 +1,2211 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+<meta name="theme-color" content="#2c6e63" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="CS-10" />
+<link rel="manifest" href="./manifest.webmanifest" />
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
+<title>CS-30 / CS-10 立ち座りテスト</title>
+<style>
+  :root{--ink:#1c2b2a;--paper:#eef3f1;--line:#c7d3cf;--accent:#2c6e63;--accent-dim:#8fb9b0;--warn:#b5502e;--up:#2c6e63;--down:#b5502e;--mono:'SF Mono','Courier New',monospace;}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;min-height:100%;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;overscroll-behavior:none;}
+  #app{display:flex;flex-direction:column;min-height:100dvh;max-width:520px;margin:0 auto;
+       padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);}
+  header{padding:14px 18px 10px;display:flex;align-items:baseline;justify-content:space-between;border-bottom:1px solid var(--line);}
+  header .title{font-size:15px;letter-spacing:.08em;font-weight:700;color:var(--accent);}
+  header .sub{font-size:11px;color:#6b7d78;letter-spacing:.04em;}
+
+  .banner{margin:10px 18px 0;padding:10px 12px;border-radius:10px;font-size:12px;line-height:1.6;display:none;}
+  .banner.show{display:block;}
+  .banner.warn{background:#fbeee9;border:1px solid #e6c3b5;color:#8c3d1f;}
+  .banner.info{background:#e6efec;border:1px solid var(--line);color:#38504b;}
+
+  .mode-row{display:flex;gap:8px;padding:10px 18px 0;}
+  .mode-btn{flex:1;padding:9px 6px;border-radius:8px;border:1px solid var(--line);background:#fff;
+            font-size:13px;font-weight:600;color:#3d4d49;cursor:pointer;}
+  .mode-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+
+  .stage{position:relative;margin:10px 18px 0;border-radius:14px;overflow:hidden;background:#0f1a18;flex-shrink:0;aspect-ratio:3/4;}
+  #video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:0;background:#0f1a18;}
+  #overlay{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:1;}
+  .stage.mirror #video,.stage.mirror #overlay{transform:scaleX(-1);}
+  .stage-overlay{position:absolute;inset:0;z-index:2;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;}
+  .phase-tag{margin:10px 0;padding:4px 10px;border-radius:20px;background:rgba(0,0,0,.45);color:#fff;font-size:11px;font-weight:600;}
+  .cue{align-self:center;margin-bottom:14px;padding:6px 16px;border-radius:20px;background:rgba(181,80,46,.92);color:#fff;font-size:13px;font-weight:600;display:none;}
+  .cue.show{display:block;}
+  .cue.go{background:rgba(44,110,99,.95);font-size:16px;padding:8px 24px;}
+  .big-count{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3;
+             font-family:var(--mono);font-size:96px;font-weight:700;color:#fff;text-shadow:0 2px 16px rgba(0,0,0,.6);opacity:0;pointer-events:none;}
+  .big-count.pop{animation:pop .7s ease-out;}
+  @keyframes pop{0%{opacity:0;transform:translate(-50%,-50%) scale(.6);}25%{opacity:1;transform:translate(-50%,-50%) scale(1.1);}100%{opacity:0;transform:translate(-50%,-50%) scale(1);}}
+  @media (prefers-reduced-motion:reduce){.big-count.pop{animation:none;}}
+
+  .cam-gate{position:absolute;inset:0;z-index:4;display:flex;flex-direction:column;align-items:center;justify-content:center;
+            background:rgba(15,26,24,.92);color:#fff;text-align:center;padding:20px;}
+  .cam-gate.hide{display:none;}
+  .cam-gate p{font-size:12px;color:#a9bdb8;line-height:1.7;margin:0 0 16px;}
+  .cam-gate button{padding:14px 28px;border-radius:24px;border:none;background:var(--accent);color:#fff;font-size:15px;font-weight:700;cursor:pointer;}
+
+  .result-overlay{position:absolute;inset:0;background:rgba(15,26,24,.94);display:none;flex-direction:column;
+                  align-items:center;justify-content:center;color:#fff;text-align:center;z-index:5;padding:16px;}
+  .result-overlay.show{display:flex;}
+  .result-overlay .r-label{font-size:12px;letter-spacing:.1em;color:var(--accent-dim);}
+  .result-overlay .r-time{font-family:var(--mono);font-size:48px;font-weight:700;margin:4px 0 2px;}
+  .result-overlay .r-sub{font-size:12px;color:#a9bdb8;margin-bottom:16px;line-height:1.8;}
+  .result-overlay button{padding:10px 22px;border-radius:20px;border:1px solid var(--accent-dim);background:transparent;color:#fff;font-size:13px;font-weight:600;cursor:pointer;}
+
+  .readout{display:flex;padding:14px 18px 0;gap:10px;}
+  .readout.second{padding-top:10px;}
+  .metric{flex:1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fff;}
+  .metric .label{font-size:10px;color:#6b7d78;letter-spacing:.08em;font-weight:700;}
+  .metric .value{font-family:var(--mono);font-size:26px;font-weight:700;margin-top:2px;}
+  .metric .value.count{color:var(--accent);}
+  .metric .value.small{font-size:20px;}
+  .metric.up .value{color:var(--up);}
+  .metric.down .value{color:var(--down);}
+
+  .controls{display:flex;gap:10px;padding:14px 18px 10px;}
+  .btn{flex:1;padding:14px;border-radius:10px;border:none;font-size:15px;font-weight:700;cursor:pointer;}
+  .btn.start{background:var(--accent);color:#fff;}
+  .btn.reset{background:#fff;border:1px solid var(--line);color:#3d4d49;}
+  .btn:disabled{opacity:.45;}
+  .controls.sub .btn{padding:12px;font-size:13px;background:#fff;border:1px solid var(--line);color:#3d4d49;}
+  .controls.sub .btn.primary{background:#e6efec;border-color:var(--accent-dim);color:var(--accent);}
+
+  .panel{margin:2px 18px 10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;}
+  .panel summary{font-size:12px;font-weight:700;color:#6b7d78;cursor:pointer;}
+  .panel h3{font-size:12px;margin:0 0 8px;color:#6b7d78;letter-spacing:.06em;}
+  .row{display:flex;align-items:center;gap:10px;margin-top:10px;}
+  .row label{font-size:12px;color:#4d5d59;flex:1;}
+  .row input[type=range]{flex:1;}
+  .row select{flex:1;padding:7px;border-radius:6px;border:1px solid var(--line);font-size:12px;background:#fff;color:var(--ink);max-width:60%;}
+  .row .val{font-family:var(--mono);font-size:11px;width:38px;text-align:right;}
+  .mini-btn{padding:9px 14px;border-radius:8px;border:1px solid var(--line);background:#f5f8f7;font-size:12px;font-weight:600;color:#3d4d49;cursor:pointer;}
+  .row label.switch,.switch{position:relative;width:44px;height:26px;flex:0 0 44px;
+          display:inline-block;cursor:pointer;touch-action:manipulation;}
+  .switch input{opacity:0;width:0;height:0;}
+  .slider{position:absolute;inset:0;background:#c7d3cf;border-radius:26px;transition:.2s;cursor:pointer;pointer-events:none;}
+  .slider:before{content:"";position:absolute;height:20px;width:20px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;}
+  .switch input:checked + .slider{background:var(--accent);}
+  .switch input:checked + .slider:before{transform:translateX(18px);}
+  .switch input:focus-visible + .slider{outline:2px solid var(--accent);outline-offset:2px;}
+  .switch input:disabled + .slider{opacity:.4;}
+  .switch:has(input:disabled){cursor:not-allowed;}
+
+  table.reps{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px;margin-top:6px;}
+  table.reps th,table.reps td{padding:5px 4px;text-align:right;border-bottom:1px solid #e4ebe8;}
+  table.reps th{color:#7a8b86;font-weight:700;font-size:10px;}
+  table.reps td:first-child,table.reps th:first-child{text-align:left;}
+  table.reps tr.summary td{border-top:2px solid var(--line);border-bottom:none;font-weight:700;color:var(--accent);padding-top:7px;}
+  .empty-note{font-size:11px;color:#9aaaa6;padding:8px 0;text-align:center;}
+
+  .diag{font-family:var(--mono);font-size:11px;line-height:1.9;color:#4d5d59;margin-top:8px;
+        background:#f5f8f7;border-radius:8px;padding:10px;word-break:break-all;}
+  .diag .k{color:#7a8b86;}
+  .diag .bad{color:var(--warn);font-weight:700;}
+  .diag .good{color:var(--accent);font-weight:700;}
+  .profile-row{display:flex;gap:8px;padding:10px 18px 0;}
+  .profile-row select{flex:1;padding:9px;border-radius:8px;border:1px solid var(--line);background:#fff;font-size:13px;color:var(--ink);}
+  .r-fb{font-size:15px;font-weight:700;line-height:1.6;margin:2px 12px 10px;color:#fff;}
+  .fb-grade{display:inline-block;padding:4px 14px;border-radius:16px;font-size:12px;font-weight:700;color:#fff;margin-bottom:8px;}
+  .fb-line{font-size:14px;font-weight:700;line-height:1.7;margin-bottom:8px;}
+  .fb-detail{font-size:11px;color:#6b7d78;line-height:1.8;}
+  .fb-scale{display:flex;gap:3px;margin:10px 0 8px;}
+  .fb-scale div{flex:1;height:9px;border-radius:4px;background:#e4ebe8;}
+  .tag-row{display:flex;align-items:center;gap:8px;align-self:flex-start;margin:0 10px;}
+  .rec-dot{display:none;margin:10px 0 10px 0;padding:4px 10px;border-radius:20px;background:rgba(181,80,46,.92);
+           color:#fff;font-size:11px;font-weight:700;letter-spacing:.06em;}
+  .rec-dot.on{display:block;animation:blink 1.4s ease-in-out infinite;}
+  @keyframes blink{0%,100%{opacity:1;}50%{opacity:.35;}}
+  @media (prefers-reduced-motion:reduce){.rec-dot.on{animation:none;}}
+  .status-line{padding:0 18px 18px;font-size:11px;color:#7a8b86;text-align:center;line-height:1.7;}
+
+  /* 波形モーダル */
+  .wave-modal{position:fixed;inset:0;z-index:50;background:var(--paper);display:none;flex-direction:column;
+              padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);}
+  .wave-modal.show{display:flex;}
+  .wave-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line);}
+  .wave-head .t{font-size:14px;font-weight:700;color:var(--accent);}
+  .wave-head button{padding:8px 16px;border-radius:8px;border:1px solid var(--line);background:#fff;font-size:13px;font-weight:600;cursor:pointer;}
+  .wave-tabs{display:flex;gap:6px;padding:10px 16px 0;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .wave-tabs button{flex-shrink:0;padding:7px 12px;border-radius:16px;border:1px solid var(--line);background:#fff;
+                    font-size:12px;font-weight:600;color:#4d5d59;cursor:pointer;white-space:nowrap;}
+  .wave-tabs button.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .wave-opts{display:flex;gap:14px;align-items:center;padding:10px 16px 4px;font-size:11px;color:#6b7d78;flex-wrap:wrap;}
+  .wave-opts label{display:flex;align-items:center;gap:5px;cursor:pointer;}
+  .wave-body{flex:1;overflow-y:auto;padding:6px 16px 20px;}
+  .chart-wrap{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px;margin-bottom:12px;}
+  .chart-wrap canvas{width:100%;display:block;}
+  .chart-cap{font-size:11px;color:#6b7d78;padding:4px 2px 0;line-height:1.6;}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 10px;padding:8px 2px 0;}
+  .legend span{font-size:10px;font-family:var(--mono);color:#4d5d59;display:flex;align-items:center;gap:4px;}
+  .legend i{width:14px;height:3px;border-radius:2px;display:inline-block;}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div>
+      <div class="title">立ち座りテスト計測</div>
+      <div class="sub">CS-30 / CS-10・骨格推定</div>
+    </div>
+    <div class="sub" id="fpsTag">-- fps</div>
+  </header>
+
+  <div class="banner" id="topBanner"></div>
+
+  <div class="mode-row">
+    <button class="mode-btn active" data-test="cs30">CS-30（30秒で何回）</button>
+    <button class="mode-btn" data-test="cs10">CS-10（10回で何秒）</button>
+  </div>
+
+  <div class="mode-row">
+    <button class="mode-btn active" data-mode="side">側方から撮影</button>
+    <button class="mode-btn" data-mode="front">前方から撮影</button>
+  </div>
+
+  <div class="profile-row">
+    <select id="ageSel" aria-label="年代">
+      <option value="20-29">20代</option><option value="30-39">30代</option>
+      <option value="40-49">40代</option><option value="50-59">50代</option>
+      <option value="60-64">60〜64歳</option><option value="65-69">65〜69歳</option>
+      <option value="70-74" selected>70〜74歳</option><option value="75-79">75〜79歳</option>
+      <option value="80+">80歳以上</option>
+    </select>
+    <select id="sexSel" aria-label="性別">
+      <option value="female">女性</option><option value="male">男性</option>
+    </select>
+  </div>
+
+  <div class="stage" id="stage">
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="overlay"></canvas>
+    <div class="stage-overlay">
+      <div class="tag-row"><div class="phase-tag" id="phaseTag">待機中</div><div class="rec-dot" id="recDot">● REC</div></div>
+      <div class="cue" id="cueTag"></div>
+    </div>
+    <div class="big-count" id="bigCount"></div>
+    <div class="cam-gate" id="camGate">
+      <p>カメラを起動します。<br>タップすると許可の確認が表示されます。</p>
+      <button id="camStartBtn">カメラを開始</button>
+    </div>
+    <div class="result-overlay" id="resultOverlay">
+      <div class="r-label">完了タイム</div>
+      <div class="r-time" id="resultTime">0.0秒</div>
+      <div class="r-fb" id="resultFb"></div>
+      <div class="r-sub" id="resultSub"></div>
+      <button id="resultClose">閉じる</button>
+    </div>
+  </div>
+
+  <div class="readout">
+    <div class="metric"><div class="label" id="countLabel">回数</div><div class="value count" id="countValue">0 回</div></div>
+    <div class="metric"><div class="label" id="timeLabel">残り時間</div><div class="value" id="timeValue">30.0秒</div></div>
+  </div>
+  <div class="readout second">
+    <div class="metric up"><div class="label">起立（直近）</div><div class="value small" id="upValue">--</div></div>
+    <div class="metric down"><div class="label">着座（直近）</div><div class="value small" id="downValue">--</div></div>
+  </div>
+
+  <div class="controls">
+    <button class="btn start" id="startBtn">計測開始</button>
+    <button class="btn reset" id="resetBtn">リセット</button>
+  </div>
+  <div class="controls sub">
+    <button class="btn primary" id="waveBtn">波形を見る</button>
+    <button class="btn" id="csvTs">CSV（時系列）</button>
+    <button class="btn" id="csvSum">CSV（集計）</button>
+  </div>
+
+  <div class="controls sub" id="installRow" style="display:none;">
+    <button class="btn primary" id="installBtn">アプリとしてインストール</button>
+  </div>
+  <div class="banner" id="iosHint"></div>
+
+  <div class="panel" id="fbPanel" style="display:none;">
+    <h3>基準値との比較</h3>
+    <div id="fbBody"></div>
+  </div>
+
+  <div class="panel" id="postPanel" style="display:none;">
+    <h3>姿勢と重心</h3>
+    <div id="postBody"></div>
+  </div>
+
+  <div class="panel">
+    <h3>1回ごとの結果</h3>
+    <div id="repTableWrap"><div class="empty-note">計測するとここに表示されます</div></div>
+  </div>
+
+  <details class="panel">
+    <summary>カメラの設定</summary>
+    <div class="row">
+      <label for="camSelect">使用するカメラ</label>
+      <select id="camSelect"><option>カメラ開始後に選べます</option></select>
+    </div>
+    <div class="row">
+      <label for="renderMode">映像の表示方式</label>
+      <select id="renderMode">
+        <option value="canvas">キャンバス描画（推奨）</option>
+        <option value="video">ビデオ直接表示</option>
+      </select>
+    </div>
+    <div class="row">
+      <label for="skelColor">骨格線の色</label>
+      <select id="skelColor">
+        <option value="auto">自動（背景に応じて選ぶ）</option>
+        <option value="#ff2fd0">マゼンタ</option>
+        <option value="#00e5ff">シアン</option>
+        <option value="#b6ff00">黄緑</option>
+        <option value="#ff7a00">オレンジ</option>
+        <option value="#ffffff">白</option>
+        <option value="#111111">黒</option>
+      </select>
+    </div>
+    <div class="row">
+      <label for="mirrorOn">左右反転して表示</label>
+      <label class="switch"><input type="checkbox" id="mirrorOn" /><span class="slider"></span></label>
+    </div>
+    <div class="row">
+      <button class="mini-btn" id="cycleCam" style="flex:1;">次のカメラに切り替え</button>
+      <button class="mini-btn" id="restartCam" style="flex:1;">再起動</button>
+    </div>
+    <div class="row"><label id="camHint" style="font-size:11px;color:#7a8b86;">カメラ開始後に一覧が表示されます</label></div>
+  </details>
+
+  <details class="panel" id="recPanel">
+    <summary>動画の保存</summary>
+    <div class="row">
+      <label for="recordOn">計測中の動画を保存する</label>
+      <label class="switch"><input type="checkbox" id="recordOn" /><span class="slider"></span></label>
+    </div>
+    <div class="row">
+      <label for="recSource">録画する内容</label>
+      <select id="recSource">
+        <option value="annotated">骨格線つき</option>
+        <option value="raw">カメラ映像のみ</option>
+      </select>
+    </div>
+    <div class="row">
+      <label for="subjectId">対象者ID・メモ</label>
+      <input type="text" id="subjectId" placeholder="例: A001 / 初回" maxlength="40"
+             style="flex:1;max-width:60%;padding:8px;border-radius:6px;border:1px solid var(--line);font-size:13px;" />
+    </div>
+    <div class="row">
+      <label for="saveMode">保存のしかた</label>
+      <select id="saveMode">
+        <option value="zip">ZIPにまとめる（1計測=1ファイル）</option>
+        <option value="folder">フォルダに保存（フォルダを指定）</option>
+        <option value="flat">個別に保存</option>
+      </select>
+    </div>
+    <div class="row" id="pickDirRow" style="display:none;">
+      <button class="mini-btn" id="pickDirBtn" style="flex:1;">保存先フォルダを選ぶ</button>
+    </div>
+    <div class="row">
+      <label for="micOn">マイクの音声も録音する</label>
+      <label class="switch"><input type="checkbox" id="micOn" /><span class="slider"></span></label>
+    </div>
+    <div class="row">
+      <label for="csvAuto">計測終了時にCSVも保存する</label>
+      <label class="switch"><input type="checkbox" id="csvAuto" checked /><span class="slider"></span></label>
+    </div>
+    <div class="row">
+      <label for="csvKind">保存するCSV</label>
+      <select id="csvKind">
+        <option value="both">集計＋時系列</option>
+        <option value="summary">集計のみ</option>
+      </select>
+    </div>
+    <div class="row"><label id="recHint" style="font-size:11px;color:#7a8b86;line-height:1.7;">保存先：ダウンロードフォルダ</label></div>
+  </details>
+
+  <details class="panel">
+    <summary>音声の設定</summary>
+    <div class="row"><label for="voiceOn">音声アナウンス</label>
+      <label class="switch"><input type="checkbox" id="voiceOn" checked /><span class="slider"></span></label></div>
+    <div class="row"><label for="beepOn">ビープ音（カウント時）</label>
+      <label class="switch"><input type="checkbox" id="beepOn" checked /><span class="slider"></span></label></div>
+    <div class="row"><label for="rate">読み上げ速度</label>
+      <input type="range" id="rate" min="70" max="150" value="105" /><span class="val" id="rateVal">1.05</span></div>
+    <div class="row"><label for="voiceSelect">音声の種類</label><select id="voiceSelect"></select></div>
+    <div class="row"><button class="mini-btn" id="testVoice" style="flex:1;">音声をテスト再生</button></div>
+  </details>
+
+  <details class="panel">
+    <summary>判定しきい値を調整</summary>
+    <div class="row"><label>立位角度(側方)</label><input type="range" id="thStandAngle" min="130" max="180" value="160" /><span class="val" id="thStandAngleVal">160</span></div>
+    <div class="row"><label>座位角度(側方)</label><input type="range" id="thSitAngle" min="70" max="130" value="110" /><span class="val" id="thSitAngleVal">110</span></div>
+    <div class="row"><label>立位比率(前方)</label><input type="range" id="thStandRatio" min="50" max="95" value="80" /><span class="val" id="thStandRatioVal">80</span></div>
+    <div class="row"><label>座位比率(前方)</label><input type="range" id="thSitRatio" min="5" max="50" value="30" /><span class="val" id="thSitRatioVal">30</span></div>
+  </details>
+
+  <details class="panel">
+    <summary>診断情報（問題があるときはここを確認）</summary>
+    <div class="diag" id="diagBox">カメラ未起動</div>
+    <div class="row"><button class="mini-btn" id="copyDiag" style="flex:1;">診断情報をコピー</button></div>
+  </details>
+
+  <div class="status-line" id="statusLine">「カメラを開始」を押してください</div>
+</div>
+
+<!-- 波形モーダル -->
+<div class="wave-modal" id="waveModal">
+  <div class="wave-head">
+    <div class="t">波形（10回重ねがき）</div>
+    <button id="waveClose">閉じる</button>
+  </div>
+  <div class="wave-tabs" id="waveTabs"></div>
+  <div class="wave-opts">
+    <label><input type="checkbox" id="optNormalize" /> 時間軸を0〜100%に正規化</label>
+    <label><input type="checkbox" id="optWhole" /> 全体の連続波形を表示</label>
+  </div>
+  <div class="wave-body" id="waveBody"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+<script>
+(function(){
+"use strict";
+
+/* ===== PWA: Service Worker 登録 ===== */
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  window.addEventListener('load', async () => {
+    /* sw.js が同じ場所に置かれていない環境（プレビュー表示など）では登録しない。
+       index.html だけを単体で開いた場合にエラーを出さないための確認。 */
+    try {
+      const probe = await fetch('./sw.js', {method:'GET', cache:'no-store'});
+      if (!probe.ok) {
+        console.info('sw.js が見つからないため、オフライン機能は無効です（アプリの動作には影響しません）。');
+        return;
+      }
+      const reg = await navigator.serviceWorker.register('./sw.js', {scope:'./'});
+      window.__swReg = reg;
+    } catch (err) {
+      console.info('オフライン機能を有効にできませんでした（アプリの動作には影響しません）:', err && err.message);
+    }
+  });
+}
+
+const $=id=>document.getElementById(id);
+const video=$('video'), canvas=$('overlay'), ctx=canvas.getContext('2d');
+const stage=$('stage'), camGate=$('camGate'), camStartBtn=$('camStartBtn');
+const phaseTag=$('phaseTag'), cueTag=$('cueTag'), bigCount=$('bigCount');
+const countValue=$('countValue'), timeValue=$('timeValue'), upValue=$('upValue'), downValue=$('downValue');
+const startBtn=$('startBtn'), resetBtn=$('resetBtn'), statusLine=$('statusLine'), fpsTag=$('fpsTag');
+const resultOverlay=$('resultOverlay'), resultTime=$('resultTime'), resultSub=$('resultSub'), resultClose=$('resultClose');
+const topBanner=$('topBanner'), diagBox=$('diagBox'), copyDiag=$('copyDiag');
+const camSelect=$('camSelect'), renderMode=$('renderMode'), mirrorOn=$('mirrorOn'), restartCam=$('restartCam');
+const voiceOn=$('voiceOn'), beepOn=$('beepOn'), rateInput=$('rate'), rateVal=$('rateVal');
+const voiceSelect=$('voiceSelect'), testVoice=$('testVoice');
+const repTableWrap=$('repTableWrap');
+const waveModal=$('waveModal'), waveTabs=$('waveTabs'), waveBody=$('waveBody'), waveClose=$('waveClose');
+const optNormalize=$('optNormalize'), optWhole=$('optWhole');
+const modeButtons=document.querySelectorAll('.mode-btn[data-mode]');
+const testButtons=document.querySelectorAll('.mode-btn[data-test]');
+const th={standAngle:$('thStandAngle'),sitAngle:$('thSitAngle'),standRatio:$('thStandRatio'),sitRatio:$('thSitRatio')};
+const thVal={standAngle:$('thStandAngleVal'),sitAngle:$('thSitAngleVal'),standRatio:$('thStandRatioVal'),sitRatio:$('thSitRatioVal')};
+Object.keys(th).forEach(k=>th[k].addEventListener('input',()=>thVal[k].textContent=th[k].value));
+rateInput.addEventListener('input',()=>rateVal.textContent=(rateInput.value/100).toFixed(2));
+
+function banner(kind,html){ topBanner.className='banner '+kind+' show'; topBanner.innerHTML=html; }
+function clearBanner(){ topBanner.className='banner'; }
+
+/* ===== 音声 ===== */
+const Voice={
+  supported:('speechSynthesis' in window), unlocked:false, voices:[], chosen:null, audioCtx:null,
+  init(){ if(!this.supported) return;
+    this.load(); window.speechSynthesis.onvoiceschanged=()=>this.load();
+    setTimeout(()=>this.load(),500); setTimeout(()=>this.load(),1500); },
+  load(){ const all=window.speechSynthesis.getVoices()||[]; if(!all.length) return;
+    const ja=all.filter(v=>/^ja/i.test(v.lang)); this.voices=ja.length?ja:all;
+    const prev=this.chosen&&this.chosen.name; voiceSelect.innerHTML='';
+    this.voices.forEach((v,i)=>{const o=document.createElement('option');o.value=i;o.textContent=v.name+' ('+v.lang+')';voiceSelect.appendChild(o);});
+    let idx=0; if(prev){const f=this.voices.findIndex(v=>v.name===prev); if(f>=0) idx=f;}
+    voiceSelect.value=idx; this.chosen=this.voices[idx]; },
+  unlock(){ if(this.unlocked) return; this.unlocked=true;
+    try{ if(this.supported){const u=new SpeechSynthesisUtterance(' ');u.volume=0;u.lang='ja-JP';window.speechSynthesis.speak(u);}
+      const AC=window.AudioContext||window.webkitAudioContext;
+      if(AC){
+        const c=new AC(); this.audioCtx=c;
+        if(c.state==='suspended') c.resume();
+        /* アプリが鳴らす音は master を通す。master はスピーカーと録画用の両方につなぐ */
+        this.master=c.createGain(); this.master.gain.value=1;
+        this.master.connect(c.destination);
+        if(c.createMediaStreamDestination){
+          this.recDest=c.createMediaStreamDestination();
+          this.master.connect(this.recDest);
+        }
+      }
+    }catch(e){} },
+  say(t,{interrupt=false}={}){ if(!voiceOn.checked||!this.supported) return;
+    try{ if(interrupt) window.speechSynthesis.cancel();
+      if(window.speechSynthesis.paused) window.speechSynthesis.resume();
+      const u=new SpeechSynthesisUtterance(t); u.lang='ja-JP'; u.rate=rateInput.value/100; u.volume=1;
+      if(this.chosen) u.voice=this.chosen; window.speechSynthesis.speak(u);
+    }catch(e){} },
+  sayThen(t,cb){
+    let done=false;
+    const fire=()=>{ if(done) return; done=true; try{cb();}catch(e){} };
+    if(!voiceOn.checked||!this.supported){ setTimeout(fire,300); return; }
+    try{
+      window.speechSynthesis.cancel();
+      if(window.speechSynthesis.paused) window.speechSynthesis.resume();
+      const u=new SpeechSynthesisUtterance(t);
+      u.lang='ja-JP'; u.rate=rateInput.value/100; u.volume=1;
+      if(this.chosen) u.voice=this.chosen;
+      u.onend=fire; u.onerror=fire;
+      window.speechSynthesis.speak(u);
+      const rate=Math.max(.5,rateInput.value/100);
+      setTimeout(fire,(t.length/(6.5*rate))*1000+900+2500);
+    }catch(e){ fire(); }
+  },
+  beep(f=880,d=.12,type='sine'){ if(!beepOn.checked||!this.audioCtx) return;
+    try{ const c=this.audioCtx; if(c.state==='suspended') c.resume();
+      const o=c.createOscillator(), g=c.createGain(); o.type=type; o.frequency.value=f;
+      g.gain.setValueAtTime(.0001,c.currentTime); g.gain.exponentialRampToValueAtTime(.3,c.currentTime+.01);
+      g.gain.exponentialRampToValueAtTime(.0001,c.currentTime+d);
+      o.connect(g); g.connect(this.master||c.destination); o.start(); o.stop(c.currentTime+d+.02);
+    }catch(e){} },
+  chime(){ [523,659,784].forEach((f,i)=>setTimeout(()=>this.beep(f,.18,'triangle'),i*140)); }
+};
+Voice.init();
+['pointerdown','touchstart','click'].forEach(ev=>document.addEventListener(ev,()=>Voice.unlock(),{once:true,passive:true}));
+voiceSelect.addEventListener('change',()=>{Voice.chosen=Voice.voices[voiceSelect.value];});
+testVoice.addEventListener('click',()=>{Voice.unlock();Voice.beep(880,.12);Voice.say('音声のテストです。しっかりまっすぐにたって。',{interrupt:true});});
+
+/* ===== 状態 ===== */
+const S={stream:null,pose:null,poseReady:false,poseErr:null,sending:false,raf:null,
+         facing:'environment',deviceId:null,started:false,frames:0,poseFrames:0,lastLandmarks:null,
+         cams:[],camSig:'',camError:null,autoPicked:false,announcing:false};
+let mode='side', testType='cs30', running=false, repCount=0;
+const TARGET=10;
+let startTs=null, timerId=null, sessionId=0;
+let lastT=performance.now(), fps=0;
+let fMin=null,fMax=null;
+
+/* 記録 */
+const REC={frames:[],reps:[]};
+const MAX_FRAMES=40000;
+
+/* 3状態ゾーン管理 */
+let zone='unknown', pendZone=null, pendN=0;
+const CONFIRM=3;
+let tLeftSit=null, tLeftStand=null, pendingUp=null;
+
+/* ===== 幾何 ===== */
+function angleAt(a,b,c){
+  const v1={x:a.x-b.x,y:a.y-b.y}, v2={x:c.x-b.x,y:c.y-b.y};
+  const m1=Math.hypot(v1.x,v1.y), m2=Math.hypot(v2.x,v2.y);
+  if(!m1||!m2) return 0;
+  let cs=(v1.x*v2.x+v1.y*v2.y)/(m1*m2); cs=Math.max(-1,Math.min(1,cs));
+  return Math.acos(cs)*180/Math.PI;
+}
+const IDX={NOSE:0,L_EAR:7,R_EAR:8,L_SH:11,R_SH:12,L_ELB:13,R_ELB:14,L_WR:15,R_WR:16,
+  L_HIP:23,R_HIP:24,L_KNEE:25,R_KNEE:26,L_ANK:27,R_ANK:28,L_HEEL:29,R_HEEL:30,L_TOE:31,R_TOE:32};
+
+/* ===== 重心の推定 =====
+   Winter DA, Biomechanics and Motor Control of Human Movement の身体分節パラメータを用い、
+   各分節の質量比と分節内の重心位置から全身重心を加重平均で求める。
+   [近位点, 遠位点, 近位からの重心比, 質量比] */
+const SEGMENTS=[
+  ['earMid','shMid',0.50,0.081],   /* 頭頸部 */
+  ['shMid','hipMid',0.50,0.497],   /* 体幹 */
+  ['L_SH','L_ELB',0.436,0.028],  ['R_SH','R_ELB',0.436,0.028],   /* 上腕 */
+  ['L_ELB','L_WR',0.430,0.022],  ['R_ELB','R_WR',0.430,0.022],   /* 前腕＋手 */
+  ['L_HIP','L_KNEE',0.433,0.100],['R_HIP','R_KNEE',0.433,0.100], /* 大腿 */
+  ['L_KNEE','L_ANK',0.433,0.0465],['R_KNEE','R_ANK',0.433,0.0465],/* 下腿 */
+  ['L_ANK','L_TOE',0.50,0.0145], ['R_ANK','R_TOE',0.50,0.0145]   /* 足部 */
+];
+const VIS_MIN=0.35;
+
+function estimateCoM(lm){
+  const mid=(a,b)=>({x:(lm[a].x+lm[b].x)/2, y:(lm[a].y+lm[b].y)/2,
+                     visibility:Math.min(lm[a].visibility||0,lm[b].visibility||0)});
+  const pts={
+    earMid:mid(IDX.L_EAR,IDX.R_EAR), shMid:mid(IDX.L_SH,IDX.R_SH), hipMid:mid(IDX.L_HIP,IDX.R_HIP)
+  };
+  const get=k=>pts[k] || lm[IDX[k]];
+  let mx=0,my=0,mass=0;
+  for(const [a,b,r,m] of SEGMENTS){
+    const p=get(a), q=get(b);
+    if(!p||!q) continue;
+    if((p.visibility||0)<VIS_MIN || (q.visibility||0)<VIS_MIN) continue;
+    mx += (p.x+(q.x-p.x)*r)*m;
+    my += (p.y+(q.y-p.y)*r)*m;
+    mass += m;
+  }
+  if(mass<0.4) return null;   /* 検出できた分節が少なすぎる場合は算出しない */
+  return {x:mx/mass, y:my/mass, coverage:mass};
+}
+function pickSide(lm){
+  const l=(lm[IDX.L_HIP].visibility||0)+(lm[IDX.L_KNEE].visibility||0)+(lm[IDX.L_ANK].visibility||0);
+  const r=(lm[IDX.R_HIP].visibility||0)+(lm[IDX.R_KNEE].visibility||0)+(lm[IDX.R_ANK].visibility||0);
+  return l>=r?'L':'R';
+}
+
+/* 1フレーム分の計測値をまとめて算出 */
+function measure(lm){
+  const s=pickSide(lm);
+  const sh=lm[s==='L'?IDX.L_SH:IDX.R_SH], hip=lm[s==='L'?IDX.L_HIP:IDX.R_HIP];
+  const knee=lm[s==='L'?IDX.L_KNEE:IDX.R_KNEE], ank=lm[s==='L'?IDX.L_ANK:IDX.R_ANK];
+  const kneeAngle=angleAt(hip,knee,ank);
+  const hipAngle=angleAt(sh,hip,knee);
+
+  const hipY=(lm[IDX.L_HIP].y+lm[IDX.R_HIP].y)/2;
+  const ankY=(lm[IDX.L_ANK].y+lm[IDX.R_ANK].y)/2;
+  const gap=Math.abs(ankY-hipY);
+  if(fMin===null||gap<fMin) fMin=gap;
+  if(fMax===null||gap>fMax) fMax=gap;
+  const ratio=((gap-fMin)/Math.max(.001,fMax-fMin))*100;
+
+  const vis=Math.min(hip.visibility||0,knee.visibility||0,ank.visibility||0);
+
+  /* ---- 姿勢の左右対称性 ---- */
+  const shMid={x:(lm[IDX.L_SH].x+lm[IDX.R_SH].x)/2, y:(lm[IDX.L_SH].y+lm[IDX.R_SH].y)/2};
+  const hipMid={x:(lm[IDX.L_HIP].x+lm[IDX.R_HIP].x)/2, y:(lm[IDX.L_HIP].y+lm[IDX.R_HIP].y)/2};
+  const footMid={x:(lm[IDX.L_ANK].x+lm[IDX.R_ANK].x)/2, y:(lm[IDX.L_ANK].y+lm[IDX.R_ANK].y)/2};
+  const headPt={x:(lm[IDX.L_EAR].x+lm[IDX.R_EAR].x)/2, y:(lm[IDX.L_EAR].y+lm[IDX.R_EAR].y)/2};
+
+  /* 尺度: 肩幅（体格差の影響を除くため、偏位はこれに対する比で表す） */
+  const shoulderW=Math.max(0.02, Math.abs(lm[IDX.L_SH].x-lm[IDX.R_SH].x));
+  const bodyH=Math.max(0.05, Math.abs(footMid.y-shMid.y));
+  const scale = mode==='front' ? shoulderW : bodyH*0.35;
+
+  /* 向きの符号。前方では「対象者から見て左」を正、側方では「対象者の前方」を正とする。
+     画面の左右反転設定に影響されないよう、解剖学的な左右から向きを決める。 */
+  let signRef;
+  if(mode==='front'){
+    signRef = Math.sign(lm[IDX.L_SH].x - lm[IDX.R_SH].x) || 1;   /* 左肩が画面右にあれば +1 */
+  }else{
+    /* 側方は「つま先とかかとの位置関係」で前方を決める。
+       鼻と肩で判定すると、前傾したときに肩が鼻より前へ出て符号が反転してしまうため。 */
+    const toeMid={x:(lm[IDX.L_TOE].x+lm[IDX.R_TOE].x)/2,
+                  v:Math.min(lm[IDX.L_TOE].visibility||0,lm[IDX.R_TOE].visibility||0)};
+    const heelMid={x:(lm[IDX.L_HEEL].x+lm[IDX.R_HEEL].x)/2,
+                   v:Math.min(lm[IDX.L_HEEL].visibility||0,lm[IDX.R_HEEL].visibility||0)};
+    let d=0;
+    if(toeMid.v>0.3 && heelMid.v>0.3) d=toeMid.x-heelMid.x;
+    /* 足が映っていない場合は、鼻と耳の位置関係で代用する（鼻は必ず耳より前方） */
+    if(Math.abs(d)<0.008){
+      const earMidX=(lm[IDX.L_EAR].x+lm[IDX.R_EAR].x)/2;
+      d=lm[IDX.NOSE].x-earMidX;
+    }
+    signRef=Math.sign(d)||1;
+  }
+
+  const headOff  = ((headPt.x - footMid.x)/scale) * signRef * 100;
+  const trunkOff = ((shMid.x  - footMid.x)/scale) * signRef * 100;
+  const pelvisOff= ((hipMid.x - footMid.x)/scale) * signRef * 100;
+  /* 体幹の傾き（鉛直からの角度）。正なら前方では対象者の左へ、側方では前方へ傾く */
+  const trunkTilt= Math.atan2((shMid.x-hipMid.x)*signRef, Math.abs(hipMid.y-shMid.y))*180/Math.PI;
+  /* 肩と骨盤の水平からの傾き（前方で肩下がり・骨盤傾斜を見る） */
+  const shTilt   = Math.atan2((lm[IDX.L_SH].y-lm[IDX.R_SH].y), Math.abs(lm[IDX.L_SH].x-lm[IDX.R_SH].x))*180/Math.PI;
+
+  /* ---- 重心 ---- */
+  const com=estimateCoM(lm);
+  const comX = com? com.x : NaN;
+  const comY = com? com.y : NaN;
+  /* 足部中点を原点、肩幅（側方は身長の35%）を1とした相対座標。上方向を正にする */
+  const comRelX = com? ((com.x-footMid.x)/scale)*signRef : NaN;
+  const comRelY = com? ((footMid.y-com.y)/scale) : NaN;
+
+  return {side:s,kneeAngle,hipAngle,ratio,
+          shX:sh.x,shY:sh.y,hipX:hip.x,hipY:hip.y,kneeX:knee.x,kneeY:knee.y,ankX:ank.x,ankY:ank.y,vis,
+          headOff,trunkOff,pelvisOff,trunkTilt,shTilt,
+          comX,comY,comRelX,comRelY,
+          footMidX:footMid.x,footMidY:footMid.y,scale:scale,signRef:signRef};
+}
+
+/* しきい値からゾーンを決める */
+function zoneOf(m){
+  if(mode==='side'){
+    const st=+th.standAngle.value, si=+th.sitAngle.value;
+    if(m.kneeAngle>=st && m.hipAngle>=st-15) return 'stand';
+    if(m.kneeAngle<=si) return 'sit';
+    return 'mid';
+  }else{
+    const st=+th.standRatio.value, si=+th.sitRatio.value;
+    if(m.ratio>=st) return 'stand';
+    if(m.ratio<=si) return 'sit';
+    return 'mid';
+  }
+}
+
+/* ===== 統計 ===== */
+function mean(a){ return a.length? a.reduce((x,y)=>x+y,0)/a.length : NaN; }
+function sd(a){ if(a.length<2) return NaN; const m=mean(a);
+  return Math.sqrt(a.reduce((s,v)=>s+(v-m)*(v-m),0)/(a.length-1)); }
+function fx(v,d){ return (v===null||v===undefined||isNaN(v))?'--':v.toFixed(d===undefined?2:d); }
+
+/* ===== 基準値 =====
+   CS-30: 中谷敏昭ほか「30秒椅子立ち上がりテスト(CS-30テスト)成績の加齢変化と標準値の作成」
+          臨床スポーツ医学 20(3):349-355, 2003 の5段階評価基準
+   数値は [評価5の下限, 評価4の下限, 評価3の下限, 評価2の下限]（回）
+*/
+const CS30_REF={
+  male:{'20-29':[38,33,28,23],'30-39':[37,31,26,21],'40-49':[36,30,25,20],
+        '50-59':[32,28,22,18],'60-64':[32,26,20,14],'65-69':[26,22,18,14],
+        '70-74':[25,21,16,12],'75-79':[22,18,15,11],'80+':[20,17,14,10]},
+  female:{'20-29':[35,29,23,18],'30-39':[34,29,24,18],'40-49':[34,28,23,17],
+        '50-59':[30,25,20,16],'60-64':[29,24,19,14],'65-69':[27,22,17,12],
+        '70-74':[24,20,15,10],'75-79':[22,18,13,9],'80+':[20,17,13,9]}
+};
+/* サルコペニアのスクリーニング目安（日本人高齢者678名のROC解析, 2021） */
+const SARCO_CUT={male:17,female:15};
+
+/* CS-10: 最初の5回分は「5回椅子立ち上がりテスト」と同じ測定になるため、
+   その年代別カットオフ（これ以上で下肢機能低下の疑い）を用いる */
+const FTSST_CUT={'20-29':12,'30-39':12,'40-49':12,'50-59':12,
+                 '60-64':11.4,'65-69':11.4,'70-74':12.6,'75-79':12.6,'80+':14.8};
+
+const GRADE_LABEL=['','劣っている','やや劣っている','ふつう','やや優れている','優れている'];
+const GRADE_COLOR=['','#b5502e','#c98b3f','#6b7d78','#4a8f70','#2c6e63'];
+const GRADE_WORD={
+  5:'同年代の中でかなり優れた結果です',
+  4:'同年代の平均を上回る良い結果です',
+  3:'同年代の平均的な範囲です',
+  2:'同年代の平均をやや下回っています',
+  1:'同年代の平均を下回っています。下肢の筋力低下に注意しましょう'
+};
+const ageKey=()=>$('ageSel').value;
+const sexKey=()=>$('sexSel').value;
+const sexWord=()=>sexKey()==='male'?'男性':'女性';
+const ageWord=()=>$('ageSel').options[$('ageSel').selectedIndex].text;
+
+function cs30Grade(count){
+  const t=CS30_REF[sexKey()][ageKey()];
+  if(!t) return 3;
+  if(count>=t[0]) return 5;
+  if(count>=t[1]) return 4;
+  if(count>=t[2]) return 3;
+  if(count>=t[3]) return 2;
+  return 1;
+}
+
+/* 結果を評価して、画面表示用のHTMLと読み上げ用の一言を返す */
+function buildFeedback(){
+  const isCs30 = testType==='cs30';
+  let grade, headline, speak, detail='';
+
+  if(isCs30){
+    const c=repCount;
+    grade=cs30Grade(c);
+    const t=CS30_REF[sexKey()][ageKey()];
+    headline=GRADE_WORD[grade];
+    speak='結果は'+c+'回。'+ageWord()+sexWord()+'の基準では「'+GRADE_LABEL[grade]+'」で、'+headline+'。';
+    detail='<div class="fb-detail">'+ageWord()+'・'+sexWord()+'の5段階基準：'
+      +'優れている '+t[0]+'回以上 ／ やや優れている '+t[1]+'〜'+(t[0]-1)+'回 ／ ふつう '+t[2]+'〜'+(t[1]-1)+'回 ／ '
+      +'やや劣っている '+t[3]+'〜'+(t[2]-1)+'回 ／ 劣っている '+(t[3]-1)+'回以下'
+      +'<br>出典：中谷敏昭ほか, 臨床スポーツ医学 20(3), 2003</div>';
+    const sc=SARCO_CUT[sexKey()];
+    if(c<sc && ['65-69','70-74','75-79','80+'].indexOf(ageKey())>=0){
+      detail+='<div class="fb-detail" style="margin-top:8px;color:#8c3d1f;">'
+        +'参考：高齢者のサルコペニアのスクリーニング目安は'+sexWord()+'で'+sc+'回です。'
+        +'今回はこれを下回っています。</div>';
+    }
+  }else{
+    /* CS-10: 最初の5回に要した時間を5回立ち上がりテストの基準と比べる */
+    const five = REC.reps.length>=5 ? REC.reps[4].upEnd/1000 : null;
+    const cut = FTSST_CUT[ageKey()];
+    const total = REC.reps.length? REC.reps[REC.reps.length-1].upEnd/1000 : 0;
+    if(five===null){
+      headline='5回に達しなかったため基準値との比較はできません';
+      speak=headline+'。';
+      grade=0;
+    }else if(five<=cut*0.75){
+      grade=5; headline='基準値をかなり下回る、速くて良好な結果です';
+      speak='10回で'+total.toFixed(1)+'秒。最初の5回は'+five.toFixed(1)+'秒で、基準の'+cut+'秒をかなり下回る良好な結果です。';
+    }else if(five<=cut){
+      grade=3; headline='基準値以内で、標準的な範囲です';
+      speak='10回で'+total.toFixed(1)+'秒。最初の5回は'+five.toFixed(1)+'秒で、基準の'+cut+'秒以内、標準的な範囲です。';
+    }else{
+      grade=1; headline='基準値を上回っています。下肢機能の低下に注意しましょう';
+      speak='10回で'+total.toFixed(1)+'秒。最初の5回は'+five.toFixed(1)+'秒で、基準の'+cut+'秒を上回っています。下肢機能の低下に注意しましょう。';
+    }
+    if(five!==null){
+      detail='<div class="fb-detail">最初の5回に要した時間 '+five.toFixed(2)+'秒（'+ageWord()+'の目安：'+cut+'秒以上で下肢機能低下の疑い）'
+        +'<br>10回の合計 '+total.toFixed(2)+'秒'
+        +'<br>※5回立ち上がりテストの基準を、最初の5回分に適用しています。10回全体の基準値ではありません。</div>';
+    }
+  }
+  return {grade:grade, headline:headline, speak:speak, detail:detail};
+}
+
+function showFeedback(fb){
+  const g=fb.grade;
+  let h='';
+  if(g>0){
+    h+='<span class="fb-grade" style="background:'+GRADE_COLOR[g]+'">'+GRADE_LABEL[g]+'</span>';
+    h+='<div class="fb-scale">';
+    for(let i=1;i<=5;i++) h+='<div style="'+(i<=g?'background:'+GRADE_COLOR[g]:'')+'"></div>';
+    h+='</div>';
+  }
+  h+='<div class="fb-line">'+fb.headline+'</div>';
+  h+=fb.detail;
+  h+='<div class="fb-detail" style="margin-top:10px;color:#9aaaa6;">'
+    +'この判定は目安であり、診断ではありません。判定に用いた基準は作成から年数が経っており、'
+    +'近年の高齢者は当時より高い水準にあるという報告もあります。臨床判断は他の所見と併せて行ってください。</div>';
+  $('fbBody').innerHTML=h;
+  $('fbPanel').style.display='block';
+  $('resultFb').textContent=fb.headline;
+}
+
+/* ===== ゾーン遷移から起立・着座を切り出す ===== */
+function valueAt(t){
+  /* 指定時刻に最も近いフレームを返す */
+  let best=null,bd=Infinity;
+  for(let i=REC.frames.length-1;i>=0;i--){
+    const d=Math.abs(REC.frames[i].t-t);
+    if(d<bd){bd=d;best=REC.frames[i];}
+    if(REC.frames[i].t<t-400) break;
+  }
+  return best;
+}
+function signalOf(f){ return mode==='side'? f.kneeAngle : f.ratio; }
+
+/* しきい値に依存しないピーク速度（区間内の最大変化率） */
+function peakVel(t0,t1){
+  const fr=REC.frames.filter(f=>f.t>=t0&&f.t<=t1);
+  if(fr.length<3) return NaN;
+  let mx=0;
+  for(let i=2;i<fr.length;i++){
+    const dt=(fr[i].t-fr[i-2].t)/1000;
+    if(dt<=0) continue;
+    const dv=Math.abs(signalOf(fr[i])-signalOf(fr[i-2]))/dt;
+    if(dv>mx) mx=dv;
+  }
+  return mx||NaN;
+}
+
+function onZoneConfirmed(nz,t){
+  const prev=zone;
+  if(nz===prev) return;
+  if(prev==='sit') tLeftSit=t;
+  if(prev==='stand') tLeftStand=t;
+  zone=nz;
+  phaseTag.textContent = nz==='stand'?'立位':(nz==='sit'?'座位':'動作中');
+
+  if(!running) return;
+
+  /* 立位に到達した時点で1回とカウントする（CS-30・CS-10とも標準的な数え方） */
+  if(nz==='stand' && tLeftSit!==null){
+    const rep={
+      n:REC.reps.length+1,
+      upStart:tLeftSit, upEnd:t, upDur:(t-tLeftSit)/1000,
+      downStart:null, downEnd:null, downDur:NaN, cycle:NaN,
+      upVel:NaN, downVel:NaN, upPeak:NaN, downPeak:NaN
+    };
+    const a=valueAt(rep.upStart), b=valueAt(rep.upEnd);
+    rep.upVel=(a&&b&&rep.upDur>0)?Math.abs(signalOf(b)-signalOf(a))/rep.upDur:NaN;
+    rep.upPeak=peakVel(rep.upStart,rep.upEnd);
+    REC.reps.push(rep);
+
+    repCount=REC.reps.length;
+    rep.skelColor=SkelColor.current;
+    SkelColor.unlock();          /* 次の回の開始時に色を選び直す */
+    upValue.textContent=rep.upDur.toFixed(2)+'秒';
+    countValue.textContent = testType==='cs30' ? repCount+' 回' : repCount+' / '+TARGET;
+    popCount(repCount);
+    renderRepTable();
+    Voice.beep(880,.12);
+    if(testType==='cs10'){
+      if(repCount>=TARGET) finish();
+      else Voice.say(repCount+'回',{interrupt:true});
+    }else{
+      Voice.say(String(repCount),{interrupt:true});
+    }
+  }
+
+  /* 座位に戻った時点で、直前の回の着座データを補う */
+  if(nz==='sit' && tLeftStand!==null && REC.reps.length){
+    const rep=REC.reps[REC.reps.length-1];
+    if(rep.downStart===null){
+      rep.downStart=tLeftStand; rep.downEnd=t;
+      rep.downDur=(t-tLeftStand)/1000;
+      rep.cycle=(t-rep.upStart)/1000;
+      const c=valueAt(rep.downStart), d=valueAt(rep.downEnd);
+      rep.downVel=(c&&d&&rep.downDur>0)?Math.abs(signalOf(d)-signalOf(c))/rep.downDur:NaN;
+      rep.downPeak=peakVel(rep.downStart,rep.downEnd);
+      downValue.textContent=rep.downDur.toFixed(2)+'秒';
+      renderRepTable();
+    }
+  }
+}
+
+function updateZone(nz,t){
+  if(nz===pendZone) pendN++; else {pendZone=nz;pendN=1;}
+  if(pendN>=CONFIRM) onZoneConfirmed(nz,t);
+}
+
+/* ===== 表示 ===== */
+function popCount(n){ bigCount.textContent=n; bigCount.classList.remove('pop'); void bigCount.offsetWidth; bigCount.classList.add('pop'); }
+function showCue(t){ cueTag.classList.remove('go'); cueTag.textContent=t; cueTag.classList.add('show'); clearTimeout(showCue._t); showCue._t=setTimeout(()=>cueTag.classList.remove('show'),1800); }
+function goCue(t){ cueTag.textContent=t; cueTag.classList.add('show','go'); clearTimeout(showCue._t); showCue._t=setTimeout(()=>cueTag.classList.remove('show','go'),1400); }
+let lastCue=0; const CUE_CD=2800;
+function maybeCue(t){ const n=performance.now(); if(n-lastCue<CUE_CD) return; lastCue=n; showCue(t); Voice.beep(440,.1,'square'); Voice.say(t,{interrupt:true}); }
+
+const unitVel = ()=> mode==='side' ? '度/秒' : '%/秒';
+
+function renderRepTable(){
+  if(!REC.reps.length){ repTableWrap.innerHTML='<div class="empty-note">計測するとここに表示されます</div>'; return; }
+  const num=a=>a.filter(v=>typeof v==='number'&&!isNaN(v));
+  const up=num(REC.reps.map(r=>r.upDur)), down=num(REC.reps.map(r=>r.downDur));
+  const cyc=num(REC.reps.map(r=>r.cycle));
+  const uv=num(REC.reps.map(r=>r.upVel)), dv=num(REC.reps.map(r=>r.downVel));
+  let h='<table class="reps"><thead><tr><th>回</th><th>起立(秒)</th><th>着座(秒)</th><th>1周期(秒)</th><th>起立速度</th><th>着座速度</th></tr></thead><tbody>';
+  REC.reps.forEach(r=>{
+    h+='<tr><td>'+r.n+'</td><td>'+fx(r.upDur)+'</td><td>'+fx(r.downDur)+'</td><td>'+fx(r.cycle)
+      +'</td><td>'+fx(r.upVel,1)+'</td><td>'+fx(r.downVel,1)+'</td></tr>';
+  });
+  h+='<tr class="summary"><td>平均±SD</td><td>'+fx(mean(up))+'±'+fx(sd(up))+'</td><td>'+fx(mean(down))+'±'+fx(sd(down))
+    +'</td><td>'+fx(mean(cyc))+'±'+fx(sd(cyc))+'</td><td>'+fx(mean(uv),1)+'±'+fx(sd(uv),1)
+    +'</td><td>'+fx(mean(dv),1)+'±'+fx(sd(dv),1)+'</td></tr>';
+  h+='</tbody></table><div class="chart-cap">速度の単位は'+unitVel()
+    +'。起立時間は座位しきい値を離れてから立位しきい値に到達するまで、着座時間はその逆の区間です'
+    +'（しきい値の設定によって値が変わります）。最後の回は座り終えるまで着座欄が空欄になります。</div>';
+  repTableWrap.innerHTML=h;
+}
+
+/* ===== 姿勢と重心のまとめ =====
+   両足首の中点を基準に、頭部・肩・骨盤がどちらへ寄っているかを算出する。
+   符号は解剖学的な左右から決めているため、画面の左右反転設定の影響を受けない。 */
+function dirWord(v, th){
+  if(Math.abs(v)<th) return 'ほぼ中央';
+  if(mode==='front') return v>0 ? '左寄り' : '右寄り';
+  return v>0 ? '前寄り' : '後ろ寄り';
+}
+function tiltWord(v, th){
+  if(Math.abs(v)<th) return 'ほぼ鉛直';
+  if(mode==='front') return v>0 ? '左へ傾斜' : '右へ傾斜';
+  return v>0 ? '前傾' : '後傾';
+}
+function postureStats(){
+  const fr=REC.frames.filter(f=>isFinite(f.headOff));
+  if(!fr.length) return null;
+  const col=k=>fr.map(f=>f[k]).filter(v=>isFinite(v));
+  const maxAbs=a=>a.reduce((m,v)=>Math.abs(v)>Math.abs(m)?v:m,0);
+  const head=col('headOff'), trunk=col('trunkOff'), pelvis=col('pelvisOff');
+  const tilt=col('trunkTilt'), sht=col('shTilt');
+  const cx=col('comRelX'), cy=col('comRelY');
+  return {
+    head:{m:mean(head), sd:sd(head), max:maxAbs(head)},
+    trunk:{m:mean(trunk), sd:sd(trunk), max:maxAbs(trunk)},
+    pelvis:{m:mean(pelvis), sd:sd(pelvis), max:maxAbs(pelvis)},
+    tilt:{m:mean(tilt), sd:sd(tilt), max:maxAbs(tilt)},
+    shTilt:{m:mean(sht), sd:sd(sht), max:maxAbs(sht)},
+    comX:{m:mean(cx), sd:sd(cx), min:Math.min(...cx), max:Math.max(...cx),
+          range:Math.max(...cx)-Math.min(...cx)},
+    comY:{m:mean(cy), sd:sd(cy), min:Math.min(...cy), max:Math.max(...cy),
+          range:Math.max(...cy)-Math.min(...cy)},
+    n:fr.length
+  };
+}
+function renderPosture(){
+  const p=postureStats();
+  if(!p){ $('postPanel').style.display='none'; return; }
+  const ax = mode==='front' ? '左右' : '前後';
+  const rows=[
+    ['頭部の偏位', p.head, '%', 8],
+    ['肩の偏位',   p.trunk, '%', 8],
+    ['骨盤の偏位', p.pelvis, '%', 8],
+    ['体幹の傾き', p.tilt, '度', 3]
+  ];
+  let h='<table class="reps"><thead><tr><th>項目</th><th>平均±SD</th><th>最大</th><th>判定</th></tr></thead><tbody>';
+  rows.forEach(([name,v,unit,th])=>{
+    const word = name==='体幹の傾き' ? tiltWord(v.m,th) : dirWord(v.m,th);
+    h+='<tr><td>'+name+'</td><td>'+v.m.toFixed(1)+'±'+(isNaN(v.sd)?'--':v.sd.toFixed(1))+unit
+      +'</td><td>'+v.max.toFixed(1)+unit+'</td><td>'+word+'</td></tr>';
+  });
+  if(mode==='front'){
+    h+='<tr><td>肩の水平傾き</td><td>'+p.shTilt.m.toFixed(1)+'±'+(isNaN(p.shTilt.sd)?'--':p.shTilt.sd.toFixed(1))
+      +'度</td><td>'+p.shTilt.max.toFixed(1)+'度</td><td>'
+      +(Math.abs(p.shTilt.m)<2?'ほぼ水平':(p.shTilt.m>0?'左肩が下がる':'右肩が下がる'))+'</td></tr>';
+  }
+  h+='<tr class="summary"><td>重心の'+ax+'振れ幅</td><td colspan="2">'+p.comX.range.toFixed(3)
+    +'（肩幅比）</td><td>'+dirWord(p.comX.m,0.05)+'</td></tr>';
+  h+='<tr class="summary"><td>重心の上下移動</td><td colspan="3">'+p.comY.range.toFixed(3)
+    +'（肩幅比）　低い位置 '+p.comY.min.toFixed(3)+' 〜 高い位置 '+p.comY.max.toFixed(3)+'</td></tr>';
+  h+='</tbody></table>';
+  h+='<div class="chart-cap">偏位は両足首の中点を0とし、肩幅を100%とした比です。'
+    +(mode==='front'
+      ? '正の値は対象者から見て左、負の値は右への偏りを示します。'
+      : '正の値は前方、負の値は後方への偏りを示します。')
+    +'<br>重心はWinterの身体分節パラメータによる推定値です。詳しい軌跡は「波形を見る」の'
+    +'「重心の軌跡」タブで確認できます。'
+    +'<br>左右差の判定はあくまで画像上の見え方であり、カメラの設置角度がずれていると偏って計測されます。'
+    +'正面（または真横）から、レンズの高さを対象者の腰の高さに合わせて撮影してください。</div>';
+  $('postBody').innerHTML=h;
+  $('postPanel').style.display='block';
+}
+
+/* ===== セッション ===== */
+const fmt=ms=>(ms/1000).toFixed(1)+'秒';
+const CS30_MS=30000;
+
+/* 締めのアナウンス待ちで録画が残っている場合の後始末。
+   計測が完了した分は保存し、中断した分は破棄する。 */
+function finalizePendingRecording(clearName){
+  if(typeof Rec==='undefined') return;
+  if(Rec.tailTimer){ clearTimeout(Rec.tailTimer); Rec.tailTimer=null; }
+  if(Rec.finishing){
+    Rec.finishing=false;
+    Rec.stop(false);          /* 完了済みの計測なので保存する */
+  }else{
+    Rec.stop(true);           /* 途中で止めたので破棄する */
+    if(clearName) Rec.pendingBase=null;
+  }
+}
+
+function tick(){
+  if(startTs===null) return;
+  const el=performance.now()-startTs;
+  if(testType==='cs30'){
+    const rem=Math.max(0,CS30_MS-el);
+    timeValue.textContent=(rem/1000).toFixed(1)+'秒';
+    if(!S.said10 && rem<=10000 && rem>0){ S.said10=true; Voice.say('残り10秒',{interrupt:true}); }
+    if(rem<=3000){
+      const sec=Math.ceil(rem/1000);
+      if(sec!==S.lastCd){ S.lastCd=sec; if(sec>0) Voice.beep(660,.1); }
+    }
+    if(rem<=0) finish();
+  }else{
+    timeValue.textContent=fmt(el);
+  }
+}
+
+function applyTestType(){
+  if(testType==='cs30'){
+    $('countLabel').textContent='回数';
+    $('timeLabel').textContent='残り時間';
+    countValue.textContent='0 回';
+    timeValue.textContent='30.0秒';
+  }else{
+    $('countLabel').textContent='回数';
+    $('timeLabel').textContent='経過時間';
+    countValue.textContent='0 / '+TARGET;
+    timeValue.textContent='0.0秒';
+  }
+}
+
+function startSession(){
+  if(running||S.announcing) return;
+  if(!S.started){ statusLine.textContent='先に「カメラを開始」を押してください'; return; }
+  Voice.unlock();
+  finalizePendingRecording(false);
+  const myId=++sessionId;
+  S.announcing=true; running=false;
+  S.said10=false; S.lastCd=null;
+  repCount=0; REC.frames=[]; REC.reps=[];
+  zone='unknown'; pendZone=null; pendN=0; tLeftSit=null; tLeftStand=null; pendingUp=null;
+  fMin=null; fMax=null; startTs=null; clearInterval(timerId);
+  applyTestType();
+  upValue.textContent='--'; downValue.textContent='--';
+  $('fbPanel').style.display='none';
+  $('postPanel').style.display='none';
+  renderRepTable();
+  resultOverlay.classList.remove('show');
+  startBtn.textContent='アナウンス中…'; startBtn.disabled=true;
+  phaseTag.textContent='準備';
+  statusLine.textContent='アナウンスが終わってから計測を開始します';
+
+  Voice.sayThen('今から始めます。はいどうぞ。', ()=>{
+    if(myId!==sessionId) return;
+    S.announcing=false; running=true;
+    zone='unknown'; pendZone=null; pendN=0; tLeftSit=null; tLeftStand=null; pendingUp=null;
+    startTs=performance.now();
+    timerId=setInterval(tick,100);
+    startBtn.textContent='計測中…';
+    statusLine.textContent = testType==='cs30'
+      ? '30秒間、できるだけ速く立ち座りを繰り返してください'
+      : '10回立ち上がるまでの時間を計測します';
+    SkelColor.unlock();
+    Rec.start();
+    Voice.beep(1200,.16);
+    goCue('スタート');
+  });
+}
+
+function finish(){
+  sessionId++;
+  running=false; S.announcing=false; clearInterval(timerId);
+  Rec.pendingBase=baseName();   /* 動画とCSVで同じ名前を使う */
+  Rec.finishing=true;           /* 締めのアナウンスが終わるまで録画を続ける */
+  const el=performance.now()-startTs;
+
+  const num=a=>a.filter(v=>typeof v==='number'&&!isNaN(v));
+  const up=num(REC.reps.map(r=>r.upDur)), dn=num(REC.reps.map(r=>r.downDur));
+
+  if(testType==='cs30'){
+    timeValue.textContent='0.0秒';
+    resultTime.textContent=repCount+' 回';
+  }else{
+    const total=REC.reps.length?REC.reps[REC.reps.length-1].upEnd:el;
+    resultTime.textContent=fmt(total);
+  }
+  resultSub.innerHTML='起立 '+fx(mean(up))+' ± '+fx(sd(up))+' 秒<br>着座 '+fx(mean(dn))+' ± '+fx(sd(dn))+' 秒';
+
+  const fb=buildFeedback();
+  showFeedback(fb);
+  renderPosture();
+  resultOverlay.classList.add('show');
+  startBtn.textContent='計測開始'; startBtn.disabled=false;
+  statusLine.textContent='計測が完了しました。「波形を見る」やCSV出力が使えます';
+  renderRepTable();
+
+  autoSaveCsv();     /* 先に束を作る。動画は録画停止後に加わる */
+  Voice.chime();
+
+  /* 終了の合図と口頭フィードバックが鳴り終わってから録画を停止する。
+     先に止めてしまうと、動画が締めのアナウンスの途中で切れてしまうため。 */
+  const endRecording=()=>{
+    if(Rec.tailTimer){ clearTimeout(Rec.tailTimer); Rec.tailTimer=null; }
+    if(!Rec.finishing) return;
+    Rec.finishing=false;
+    Rec.stop(false);
+    statusLine.textContent='計測が完了しました。「波形を見る」やCSV出力が使えます';
+  };
+  /* 読み上げの終了イベントが来ない端末に備えた保険（最長30秒で打ち切る） */
+  Rec.tailTimer=setTimeout(endRecording, 30000);
+
+  setTimeout(()=>{
+    Voice.sayThen(testType==='cs30'?'終了です。':'10回、完了です。', ()=>{
+      Voice.sayThen(fb.speak, ()=>{
+        /* 声のあとに少し余韻を残してから止める */
+        setTimeout(endRecording, 900);
+      });
+    });
+  }, 500);
+}
+
+function resetSession(){
+  sessionId++;
+  S.announcing=false; running=false; clearInterval(timerId);
+  finalizePendingRecording(true);
+  S.said10=false; S.lastCd=null;
+  repCount=0; zone='unknown'; pendZone=null; pendN=0; startTs=null;
+  tLeftSit=null; tLeftStand=null; pendingUp=null;
+  REC.frames=[]; REC.reps=[];
+  applyTestType();
+  upValue.textContent='--'; downValue.textContent='--';
+  phaseTag.textContent='待機中';
+  cueTag.classList.remove('show','go');
+  $('fbPanel').style.display='none';
+  $('postPanel').style.display='none';
+  resultOverlay.classList.remove('show'); startBtn.textContent='計測開始'; startBtn.disabled=false;
+  statusLine.textContent='モードを選んで「計測開始」を押してください';
+  renderRepTable();
+  if(Voice.supported) window.speechSynthesis.cancel();
+}
+startBtn.addEventListener('click',startSession);
+resetBtn.addEventListener('click',resetSession);
+resultClose.addEventListener('click',()=>resultOverlay.classList.remove('show'));
+modeButtons.forEach(b=>b.addEventListener('click',()=>{
+  modeButtons.forEach(x=>x.classList.remove('active')); b.classList.add('active'); mode=b.dataset.mode; resetSession();
+}));
+testButtons.forEach(b=>b.addEventListener('click',()=>{
+  testButtons.forEach(x=>x.classList.remove('active')); b.classList.add('active');
+  testType=b.dataset.test; resetSession();
+}));
+$('ageSel').addEventListener('change',()=>{ if(REC.reps.length) showFeedback(buildFeedback()); });
+$('sexSel').addEventListener('change',()=>{ if(REC.reps.length) showFeedback(buildFeedback()); });
+mirrorOn.addEventListener('change',()=>stage.classList.toggle('mirror',mirrorOn.checked));
+
+/* ===== 骨格線の色の自動選択 =====
+   背景や服の色に埋もれないよう、骨格の周辺を実際にサンプリングして
+   最もコントラストの高い色を選ぶ。
+   1回の立ち座りの途中で色が変わるとちらついて見づらいため、
+   色は各回の開始時に決めて、その回のあいだは固定する。 */
+const SkelColor={
+  palette:[
+    {name:'マゼンタ', hex:'#ff2fd0', rgb:[255,47,208]},
+    {name:'シアン',   hex:'#00e5ff', rgb:[0,229,255]},
+    {name:'黄緑',     hex:'#b6ff00', rgb:[182,255,0]},
+    {name:'オレンジ', hex:'#ff7a00', rgb:[255,122,0]},
+    {name:'白',       hex:'#ffffff', rgb:[255,255,255]},
+    {name:'黒',       hex:'#111111', rgb:[17,17,17]},
+    {name:'赤',       hex:'#ff2b2b', rgb:[255,43,43]}
+  ],
+  current:'#2c6e63', currentName:'既定', locked:false, lastSample:null,
+
+  lum(c){ return 0.2126*c[0]+0.7152*c[1]+0.0722*c[2]; },
+
+  /* 骨格の各線分の付近から画素を集めて、背景色の代表値を求める */
+  sample(lm){
+    if(!canvas.width || renderMode.value!=='canvas') return null;
+    const pairs=[[IDX.L_SH,IDX.R_SH],[IDX.L_SH,IDX.L_HIP],[IDX.R_SH,IDX.R_HIP],
+                 [IDX.L_HIP,IDX.L_KNEE],[IDX.R_HIP,IDX.R_KNEE],
+                 [IDX.L_KNEE,IDX.L_ANK],[IDX.R_KNEE,IDX.R_ANK],
+                 [IDX.L_EAR,IDX.R_EAR]];
+    let r=0,g=0,b=0,n=0,lsum=0,l2sum=0;
+    try{
+      for(const [a,bIdx] of pairs){
+        const p=lm[a], q=lm[bIdx];
+        if(!p||!q) continue;
+        if((p.visibility||0)<0.3||(q.visibility||0)<0.3) continue;
+        for(let k=0;k<=4;k++){
+          const f=k/4;
+          const x=Math.round((p.x+(q.x-p.x)*f)*canvas.width);
+          const y=Math.round((p.y+(q.y-p.y)*f)*canvas.height);
+          if(x<2||y<2||x>=canvas.width-2||y>=canvas.height-2) continue;
+          const d=ctx.getImageData(x-2,y-2,5,5).data;
+          for(let i=0;i<d.length;i+=4){
+            r+=d[i]; g+=d[i+1]; b+=d[i+2]; n++;
+            const L=this.lum([d[i],d[i+1],d[i+2]]);
+            lsum+=L; l2sum+=L*L;
+          }
+        }
+      }
+    }catch(e){ return null; }
+    if(!n) return null;
+    const mL=lsum/n;
+    const std=Math.sqrt(Math.max(0,l2sum/n - mL*mL));
+    return {mean:[r/n,g/n,b/n], std:std};
+  },
+  sat(c){ return Math.max(c[0],c[1],c[2]) - Math.min(c[0],c[1],c[2]); },
+
+  /* 背景色から最も見分けやすい色を選ぶ。
+     背景の明暗が混在している場合は、白や黒はどこかで必ず重なってしまうため、
+     輝度差より色そのものの鮮やかさを重視する。 */
+  pick(bg, std){
+    const mix=Math.min(1,(std||0)/55);
+    let best=this.palette[0], bestScore=-1;
+    const bgL=this.lum(bg);
+    for(const c of this.palette){
+      const dl=Math.abs(this.lum(c.rgb)-bgL)/255;
+      const dr=Math.sqrt((c.rgb[0]-bg[0])**2+(c.rgb[1]-bg[1])**2+(c.rgb[2]-bg[2])**2)/441;
+      const cs=this.sat(c.rgb)/255;
+      const score=(0.50-0.25*mix)*dl + 0.35*dr + (0.15+0.25*mix)*cs;
+      if(score>bestScore){ bestScore=score; best=c; }
+    }
+    return {color:best, score:bestScore};
+  },
+
+  /* 各回の開始時に呼ぶ。lockが立っている間は色を変えない。 */
+  evaluate(lm, force){
+    if($('skelColor').value!=='auto'){
+      this.current=$('skelColor').value;
+      this.currentName='固定';
+      return;
+    }
+    if(this.locked && !force) return;
+    const bg=this.sample(lm);
+    if(!bg) return;
+    const r=this.pick(bg.mean, bg.std);
+    this.current=r.color.hex;
+    this.currentName=r.color.name;
+    this.lastSample=bg;
+    this.locked=true;
+  },
+  unlock(){ this.locked=false; },
+  /* 点は線より細く見えるため、線色に対して明暗を反転させて縁取りに使う */
+  dotColor(){
+    const c=this.current;
+    const rgb=[parseInt(c.substr(1,2),16),parseInt(c.substr(3,2),16),parseInt(c.substr(5,2),16)];
+    return this.lum(rgb)>140 ? '#101010' : '#ffffff';
+  }
+};
+$('skelColor').addEventListener('change',()=>{
+  SkelColor.locked=false;
+  if($('skelColor').value!=='auto'){ SkelColor.current=$('skelColor').value; SkelColor.currentName='固定'; }
+});
+
+/* ===== Pose ===== */
+function onResults(res){
+  S.poseFrames++;
+  S.lastLandmarks=res.poseLandmarks||null;
+  if(!res.poseLandmarks) return;
+  if(window.drawConnectors && window.POSE_CONNECTIONS){
+    /* 描画の前に色を決める（自動時、各回の開始時のみ評価される） */
+    SkelColor.evaluate(res.poseLandmarks,false);
+    drawConnectors(ctx,res.poseLandmarks,POSE_CONNECTIONS,{color:SkelColor.current,lineWidth:3});
+    drawLandmarks(ctx,res.poseLandmarks,{color:SkelColor.dotColor(),lineWidth:1,radius:2.5});
+  }
+  const m=measure(res.poseLandmarks);
+  const t=running&&startTs!==null ? performance.now()-startTs : null;
+
+  if(running && t!==null && REC.frames.length<MAX_FRAMES){
+    REC.frames.push({t:t,zone:zoneOf(m),kneeAngle:m.kneeAngle,hipAngle:m.hipAngle,ratio:m.ratio,
+      shX:m.shX,shY:m.shY,hipX:m.hipX,hipY:m.hipY,kneeX:m.kneeX,kneeY:m.kneeY,ankX:m.ankX,ankY:m.ankY,
+      vis:m.vis,side:m.side,
+      headOff:m.headOff,trunkOff:m.trunkOff,pelvisOff:m.pelvisOff,trunkTilt:m.trunkTilt,shTilt:m.shTilt,
+      comX:m.comX,comY:m.comY,comRelX:m.comRelX,comRelY:m.comRelY});
+  }
+  updateZone(zoneOf(m), t!==null?t:performance.now());
+
+  if(running && mode==='side' && zone==='stand' && m.kneeAngle < (+th.standAngle.value)-20){
+    maybeCue('しっかりまっすぐにたって');
+  }
+}
+async function initPose(){
+  if(typeof Pose==='undefined'){ S.poseErr='MediaPipeライブラリを読み込めませんでした（通信環境を確認）'; return; }
+  try{
+    S.pose=new Pose({locateFile:f=>'https://cdn.jsdelivr.net/npm/@mediapipe/pose/'+f});
+    S.pose.setOptions({modelComplexity:1,smoothLandmarks:true,enableSegmentation:false,
+                       minDetectionConfidence:.6,minTrackingConfidence:.6});
+    S.pose.onResults(onResults);
+    await S.pose.initialize();
+    S.poseReady=true;
+  }catch(e){ S.poseErr=String(e&&e.message||e); }
+}
+
+/* ===== カメラ ===== */
+const BAD_RE=/(scanner|mouse|virtual|obs|screen|capture card|droidcam|snap camera|ndi)/i;
+const GOOD_RE=/(webcam|web cam|camera|integrated|internal|built.?in|facetime|hd |usb video|logi|c9\d\d)/i;
+function camScore(label){ const l=label||''; let s=0; if(BAD_RE.test(l)) s-=10; if(GOOD_RE.test(l)) s+=5; if(!l) s-=1; return s; }
+function stopCamera(){
+  finalizePendingRecording(false);   /* 締め待ちの録画があれば保存してから止める */
+  if(S.raf) cancelAnimationFrame(S.raf), S.raf=null;
+  if(S.stream){ S.stream.getTracks().forEach(t=>t.stop()); S.stream=null; }
+  video.srcObject=null; S.started=false;
+}
+async function listCameras(){
+  try{
+    const devs=await navigator.mediaDevices.enumerateDevices();
+    const cams=devs.filter(d=>d.kind==='videoinput');
+    S.cams=cams;
+    const sig=cams.map(d=>d.deviceId+'|'+d.label).join('~');
+    if(sig!==S.camSig){
+      S.camSig=sig;
+      const keep=camSelect.value;
+      camSelect.innerHTML='';
+      cams.forEach((d,i)=>{
+        const o=document.createElement('option'); o.value=d.deviceId;
+        o.textContent=(d.label||('カメラ '+(i+1)))+(camScore(d.label)<0?' ⚠':'');
+        camSelect.appendChild(o);
+      });
+      if(keep && cams.some(d=>d.deviceId===keep)) camSelect.value=keep;
+    }
+    const tr=S.stream&&S.stream.getVideoTracks()[0];
+    const st=tr&&tr.getSettings?tr.getSettings():null;
+    if(st&&st.deviceId&&cams.some(d=>d.deviceId===st.deviceId)) camSelect.value=st.deviceId;
+    const idx=cams.findIndex(d=>d.deviceId===camSelect.value);
+    $('camHint').textContent='検出されたカメラ: '+cams.length+'台'+(idx>=0?'（'+(idx+1)+'台目を使用中）':'')
+      +(cams.length>1?'　※映らない場合は「次のカメラに切り替え」':'');
+  }catch(e){}
+}
+function bestCamera(cams){
+  if(!cams||!cams.length) return null;
+  return cams.slice().sort((a,b)=>camScore(b.label)-camScore(a.label))[0].deviceId;
+}
+async function startCamera(){
+  stopCamera();
+  statusLine.textContent='カメラを起動しています…';
+  if(!(window.isSecureContext||location.hostname==='localhost')){
+    banner('warn','<b>httpsではないためカメラを使えません。</b><br>tiiny.hostなどのhttpsのURLから開き直してください。'); return;
+  }
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    banner('warn','<b>このブラウザはカメラAPIに対応していません。</b>'); return;
+  }
+  const tries = S.deviceId
+    ? [{video:{deviceId:{exact:S.deviceId},width:{ideal:640},height:{ideal:480}},audio:false},
+       {video:{deviceId:S.deviceId},audio:false},{video:true,audio:false}]
+    : [{video:{facingMode:{ideal:S.facing},width:{ideal:640},height:{ideal:480}},audio:false},
+       {video:{facingMode:S.facing},audio:false},{video:true,audio:false}];
+  let stream=null,lastErr=null,usedFallback=false;
+  for(let i=0;i<tries.length;i++){
+    try{ stream=await navigator.mediaDevices.getUserMedia(tries[i]); usedFallback=(i>0); break; }
+    catch(e){ lastErr=e; }
+  }
+  if(!stream){
+    S.camError=String(lastErr&&lastErr.name||'')+': '+String(lastErr&&lastErr.message||lastErr);
+    banner('warn','<b>カメラを開けませんでした。</b><br>'+S.camError+'<br>別のカメラを選ぶか、他のアプリがカメラを使用中でないか確認してください。');
+    statusLine.textContent='カメラの権限またはデバイスを確認してください';
+    await listCameras(); return;
+  }
+  S.camError=null;
+  if(usedFallback && S.deviceId) banner('info','指定したカメラを開けなかったため、別のカメラで起動しました。');
+  S.stream=stream; video.srcObject=stream; video.setAttribute('playsinline',''); video.muted=true;
+  await new Promise(res=>{ if(video.readyState>=1) return res();
+    const t=setTimeout(res,4000); video.onloadedmetadata=()=>{clearTimeout(t);res();}; });
+  try{ await video.play(); }
+  catch(e){ banner('warn','<b>映像の再生がブロックされました。</b><br>'+String(e&&e.message||e)+'<br>画面をタップしてから「再起動」を押してください。'); }
+  canvas.width=video.videoWidth||640; canvas.height=video.videoHeight||480;
+  S.started=true; camGate.classList.add('hide');
+  await listCameras();
+  if(!S.autoPicked){
+    S.autoPicked=true;
+    const tr0=stream.getVideoTracks()[0];
+    const cur=tr0&&tr0.getSettings?tr0.getSettings().deviceId:null;
+    const curLabel=(tr0&&tr0.label)||'';
+    const best=bestCamera(S.cams);
+    if(best&&cur&&best!==cur&&camScore(curLabel)<0){
+      S.deviceId=best;
+      banner('info','「'+curLabel+'」はカメラではない可能性があるため、別のカメラに切り替えます。');
+      return startCamera();
+    }
+  }
+  if(!S.poseReady && !S.poseErr) await initPose();
+  if(S.poseErr) banner('info','<b>骨格検出は無効です（映像のみ表示中）。</b><br>'+S.poseErr); else clearBanner();
+  statusLine.textContent='モードを選んで「計測開始」を押してください';
+  loop();
+}
+function loop(){
+  S.raf=requestAnimationFrame(loop);
+  if(!S.started||video.readyState<2) return;
+  const now=performance.now(), dt=now-lastT; lastT=now;
+  const f=1000/Math.max(1,dt); fps=fps?fps*.9+f*.1:f;
+  fpsTag.textContent=Math.round(fps)+' fps';
+  S.frames++;
+  if(renderMode.value==='canvas') ctx.drawImage(video,0,0,canvas.width,canvas.height);
+  else ctx.clearRect(0,0,canvas.width,canvas.height);
+  if(S.poseReady && !S.sending){
+    S.sending=true;
+    S.pose.send({image:video}).catch(e=>{S.poseErr=String(e&&e.message||e);}).finally(()=>{S.sending=false;});
+  }
+}
+camStartBtn.addEventListener('click',()=>{Voice.unlock();startCamera();});
+restartCam.addEventListener('click',()=>{S.deviceId=camSelect.value||null;startCamera();});
+camSelect.addEventListener('change',()=>{S.deviceId=camSelect.value;S.autoPicked=true;startCamera();});
+$('cycleCam').addEventListener('click',()=>{
+  const cams=S.cams||[];
+  if(cams.length<2){ banner('info','切り替えられるカメラが他に見つかりません。'); return; }
+  const cur=cams.findIndex(d=>d.deviceId===camSelect.value);
+  const next=cams[(cur+1+cams.length)%cams.length];
+  S.deviceId=next.deviceId; S.autoPicked=true; camSelect.value=next.deviceId; startCamera();
+});
+renderMode.addEventListener('change',()=>{ if(S.started) ctx.clearRect(0,0,canvas.width,canvas.height); });
+
+/* ===== 共通のファイル名 =====
+   動画とCSVで同じ名前を使い、後から対応づけられるようにする */
+/* ファイル名やフォルダ名に使えない文字を除く */
+function safeName(t){
+  return String(t||'').trim()
+    .replace(/[\\/:*?"<>|]/g,'-')
+    .replace(/\s+/g,'_')
+    .replace(/^\.+/,'')
+    .slice(0,40);
+}
+function baseName(){
+  const test = testType==='cs30' ? 'CS30' : 'CS10';
+  const id = safeName($('subjectId').value);
+  let res='';
+  if(testType==='cs30'){ res='_'+repCount+'reps'; }
+  else if(REC.reps.length){ res='_'+(REC.reps[REC.reps.length-1].upEnd/1000).toFixed(1)+'s'; }
+  return test+'_'+stamp()+(id?'_'+id:'')+res;
+}
+
+/* ===== ZIPの生成 =====
+   1回の計測でできた動画とCSVを1つのZIPにまとめる。
+   外部ライブラリを使わず、無圧縮（store）で書き出す。動画はすでに圧縮済みのため実害はない。 */
+const CRC_TABLE=(()=>{const t=new Uint32Array(256);
+  for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[n]=c>>>0; }
+  return t;})();
+function crc32(u8){
+  let c=0xFFFFFFFF;
+  for(let i=0;i<u8.length;i++) c=CRC_TABLE[(c^u8[i])&0xFF]^(c>>>8);
+  return (c^0xFFFFFFFF)>>>0;
+}
+const dosTime=d=>((d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1))&0xFFFF;
+const dosDate=d=>((((d.getFullYear()-1980)&0x7F)<<9)|((d.getMonth()+1)<<5)|d.getDate())&0xFFFF;
+
+async function makeZip(entries){
+  const enc=new TextEncoder(); const parts=[], central=[];
+  let offset=0; const now=new Date();
+  for(const e of entries){
+    const nameB=enc.encode(e.name);
+    const data=new Uint8Array(await e.blob.arrayBuffer());
+    const crc=crc32(data);
+    const lh=new DataView(new ArrayBuffer(30));
+    lh.setUint32(0,0x04034b50,true); lh.setUint16(4,20,true);
+    lh.setUint16(6,0x0800,true);      /* ファイル名をUTF-8として扱う */
+    lh.setUint16(8,0,true); lh.setUint16(10,dosTime(now),true); lh.setUint16(12,dosDate(now),true);
+    lh.setUint32(14,crc,true); lh.setUint32(18,data.length,true); lh.setUint32(22,data.length,true);
+    lh.setUint16(26,nameB.length,true); lh.setUint16(28,0,true);
+    parts.push(new Uint8Array(lh.buffer),nameB,data);
+    const ch=new DataView(new ArrayBuffer(46));
+    ch.setUint32(0,0x02014b50,true); ch.setUint16(4,20,true); ch.setUint16(6,20,true);
+    ch.setUint16(8,0x0800,true); ch.setUint16(10,0,true);
+    ch.setUint16(12,dosTime(now),true); ch.setUint16(14,dosDate(now),true);
+    ch.setUint32(16,crc,true); ch.setUint32(20,data.length,true); ch.setUint32(24,data.length,true);
+    ch.setUint16(28,nameB.length,true); ch.setUint16(30,0,true); ch.setUint16(32,0,true);
+    ch.setUint16(34,0,true); ch.setUint16(36,0,true); ch.setUint32(38,0,true);
+    ch.setUint32(42,offset,true);
+    central.push(new Uint8Array(ch.buffer),nameB);
+    offset+=30+nameB.length+data.length;
+  }
+  let cdSize=0; central.forEach(u=>cdSize+=u.length);
+  const eo=new DataView(new ArrayBuffer(22));
+  eo.setUint32(0,0x06054b50,true); eo.setUint16(4,0,true); eo.setUint16(6,0,true);
+  eo.setUint16(8,entries.length,true); eo.setUint16(10,entries.length,true);
+  eo.setUint32(12,cdSize,true); eo.setUint32(16,offset,true); eo.setUint16(20,0,true);
+  return new Blob([...parts,...central,new Uint8Array(eo.buffer)],{type:'application/zip'});
+}
+
+/* ===== 保存のとりまとめ =====
+   1回の計測で出るファイル（集計CSV・時系列CSV・動画）を集めてから、
+   選んだ方法でまとめて保存する。動画は録画停止後に少し遅れて届くため、
+   全部そろうか、待ち時間が過ぎるまで待ってから書き出す。 */
+const Bundle={
+  base:null, files:[], expectVideo:false, sealed:false, timer:null,
+  dirHandle:null, dirName:null, busy:false,
+
+  begin(base, expectVideo){
+    this.base=base; this.files=[]; this.expectVideo=expectVideo; this.sealed=false;
+    if(this.timer) clearTimeout(this.timer);
+    /* 動画が届かない場合に備え、一定時間で打ち切る */
+    this.timer=setTimeout(()=>{ this.expectVideo=false; this.sealed=true; this.flush(); },
+                          expectVideo?45000:3000);
+  },
+  /* 追加しただけでは書き出さない。seal() が呼ばれるまで待つ。
+     そうしないとCSVの1件目だけで書き出され、束が分かれてしまう。 */
+  add(name, blob){
+    if(!this.base) return;
+    this.files.push({name:name, blob:blob});
+  },
+  seal(){ this.sealed=true; this.maybeFlush(); },
+  videoDone(){ this.expectVideo=false; this.maybeFlush(); },
+  maybeFlush(){ if(this.sealed && !this.expectVideo) this.flush(); },
+
+  async flush(){
+    if(this.busy || !this.base || !this.files.length) return;
+    if(this.expectVideo || !this.sealed) return;
+    this.busy=true;
+    if(this.timer){ clearTimeout(this.timer); this.timer=null; }
+    const base=this.base, files=this.files.slice();
+    this.base=null; this.files=[]; this.sealed=false;
+    const mode=$('saveMode').value;
+    try{
+      if(mode==='folder' && this.dirHandle){
+        await this.writeFolder(base, files);
+      }else if(mode==='zip'){
+        const zip=await makeZip(files.map(f=>({name:base+'/'+f.name, blob:f.blob})));
+        downloadBlob(base+'.zip', zip);
+        Rec.lastFile=base+'.zip（'+(zip.size/1048576).toFixed(1)+'MB・'+files.length+'ファイル）';
+        statusLine.textContent='保存しました：'+base+'.zip';
+      }else{
+        /* 個別保存。連続ダウンロードがまとめて確認されるのを避けるため間隔をあける */
+        files.forEach((f,i)=>setTimeout(()=>downloadBlob(f.name, f.blob), i*700));
+        Rec.lastFile=base+' の '+files.length+'ファイル';
+        statusLine.textContent='保存しました：'+files.length+'ファイル';
+      }
+      Rec.lastError=null;
+    }catch(e){
+      Rec.lastError=String(e&&e.message||e);
+      banner('warn','保存に失敗しました：'+Rec.lastError);
+    }
+    Rec.updateHint();
+    this.busy=false;
+  },
+
+  async writeFolder(base, files){
+    const perm=await this.dirHandle.queryPermission({mode:'readwrite'});
+    if(perm!=='granted' && (await this.dirHandle.requestPermission({mode:'readwrite'}))!=='granted'){
+      throw new Error('フォルダへの書き込みが許可されていません');
+    }
+    const sub=await this.dirHandle.getDirectoryHandle(base,{create:true});
+    for(const f of files){
+      const fh=await sub.getFileHandle(f.name,{create:true});
+      const w=await fh.createWritable();
+      await w.write(f.blob); await w.close();
+    }
+    Rec.lastFile=this.dirName+' / '+base+' に'+files.length+'ファイル';
+    statusLine.textContent='保存しました：'+base+' フォルダ';
+  },
+
+  async pickDir(){
+    if(!window.showDirectoryPicker){
+      banner('info','この端末ではフォルダの指定に対応していません。「ZIPにまとめる」をお使いください。');
+      return;
+    }
+    try{
+      const h=await window.showDirectoryPicker({mode:'readwrite', id:'cs30-out', startIn:'documents'});
+      if((await h.requestPermission({mode:'readwrite'}))!=='granted'){
+        banner('warn','フォルダへの書き込みが許可されませんでした。'); return;
+      }
+      this.dirHandle=h; this.dirName=h.name;
+      banner('info','保存先を「'+h.name+'」に設定しました。計測ごとにこの中へフォルダが作られます。');
+      Rec.updateHint();
+    }catch(e){
+      if(e && e.name==='AbortError') return;
+      banner('warn','フォルダを設定できませんでした：'+String(e&&e.message||e));
+    }
+  }
+};
+$('saveMode').addEventListener('change',()=>{
+  const folder=$('saveMode').value==='folder';
+  $('pickDirRow').style.display = folder ? 'flex' : 'none';
+  if(folder && !window.showDirectoryPicker){
+    banner('info','この端末はフォルダ指定に対応していません（スマートフォンでは使えません）。'
+      +'「ZIPにまとめる」を選ぶと、1回の計測が1つのファイルにまとまります。');
+  }
+  Rec.updateHint();
+});
+$('pickDirBtn').addEventListener('click',()=>Bundle.pickDir());
+$('subjectId').addEventListener('change',()=>Rec.updateHint());
+
+/* ===== 動画の録画と保存 =====
+   音声について:
+   ・カウント音やチャイムはアプリ内で合成しているため、録画に直接ミックスできる
+   ・読み上げ（Web Speech API）は音を取り出す手段が仕様上ないため、直接は録音できない
+     → マイク録音をオンにすると、スピーカーから出た読み上げを拾って録画に入る
+   保存先はブラウザのダウンロードフォルダ。
+*/
+const Rec={
+  supported: (typeof MediaRecorder!=='undefined'),
+  mime:'', recorder:null, chunks:[],
+  active:false, lastFile:null, lastError:null, discard:false, pendingBase:null,
+  finishing:false, tailTimer:null,
+  micStream:null, micSrc:null, micGain:null,
+
+  init(){
+    if(!this.supported){
+      $('recHint').textContent='この端末は動画の録画に対応していません。';
+      $('recordOn').disabled=true; $('micOn').disabled=true;
+      return;
+    }
+    this.updateHint();
+  },
+
+  /* 音声トラックの有無に応じて、対応している形式を選ぶ */
+  pickMime(withAudio){
+    const cands = withAudio ? [
+      'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+      'video/mp4;codecs=avc1,mp4a.40.2',
+      'video/mp4',
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm'
+    ] : [
+      'video/mp4;codecs=avc1.42E01E',
+      'video/mp4;codecs=avc1',
+      'video/mp4',
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp8',
+      'video/webm'
+    ];
+    for(const c of cands){
+      try{ if(MediaRecorder.isTypeSupported(c)) return c; }catch(e){}
+    }
+    return '';
+  },
+  ext(){ return (this.mime||this.pickMime(true)).indexOf('video/mp4')===0 ? 'mp4' : 'webm'; },
+
+  updateHint(){
+    if(!this.supported) return;
+    const mode=$('saveMode').value;
+    let t='';
+    if(mode==='zip'){
+      t='保存：1回の計測を1つのZIPにまとめてダウンロードします。展開するとフォルダになります。';
+    }else if(mode==='folder'){
+      t = Bundle.dirName
+        ? '保存先：'+Bundle.dirName+'　この中に計測ごとのフォルダを作ります。'
+        : '保存先が未設定です。「保存先フォルダを選ぶ」を押してください。';
+      if(!window.showDirectoryPicker) t='この端末はフォルダ指定に対応していません。「ZIPにまとめる」をお使いください。';
+    }else{
+      t='保存：ファイルを個別にダウンロードフォルダへ保存します。';
+    }
+    const nm=baseName();
+    t+='\n名前の例：'+nm+(mode==='zip'?'.zip':'');
+    t+='\n動画の形式：'+this.ext().toUpperCase();
+    if(mode!=='folder'){
+      t+='\nブラウザ設定の「ダウンロード前に各ファイルの保存場所を確認する」をオフにすると、'
+        +'確認画面が出ずに毎回同じフォルダへ自動保存されます。';
+    }
+    t+='\n音声：カウント音とチャイムは録画に入ります。'
+      + ($('micOn').checked
+          ? '読み上げの声もマイク経由で録音されます。'
+          : '読み上げの声を残すには「マイクの音声も録音する」をオンにしてください。');
+    if(this.ext()!=='mp4'){
+      t+='\nこのブラウザはMP4での録画に対応していないためWebMで保存します。';
+    }
+    if(this.lastFile) t+='\n直近の保存：'+this.lastFile;
+    if(this.lastError) t+='\n保存エラー：'+this.lastError;
+    const h=$('recHint'); h.style.whiteSpace='pre-line'; h.textContent=t;
+  },
+
+  /* マイクは利用者の操作をきっかけに取得する */
+  async enableMic(){
+    try{
+      this.micStream=await navigator.mediaDevices.getUserMedia({
+        audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:true}
+      });
+      Voice.unlock();
+      const c=Voice.audioCtx;
+      if(c && Voice.recDest){
+        this.micSrc=c.createMediaStreamSource(this.micStream);
+        this.micGain=c.createGain(); this.micGain.gain.value=1;
+        /* マイクは録画側だけにつなぐ。スピーカーにつなぐとハウリングするため */
+        this.micSrc.connect(this.micGain);
+        this.micGain.connect(Voice.recDest);
+      }
+      this.lastError=null;
+      banner('info','マイクを有効にしました。読み上げの声や口頭指示も録画に入ります。');
+    }catch(e){
+      $('micOn').checked=false;
+      this.lastError='マイクを使用できません（'+String(e&&e.message||e)+'）';
+      banner('warn','マイクを使用できませんでした。ブラウザのマイク権限を確認してください。');
+    }
+    this.updateHint();
+  },
+  disableMic(){
+    try{ if(this.micGain) this.micGain.disconnect(); }catch(e){}
+    try{ if(this.micSrc) this.micSrc.disconnect(); }catch(e){}
+    if(this.micStream){ this.micStream.getTracks().forEach(t=>t.stop()); }
+    this.micStream=null; this.micSrc=null; this.micGain=null;
+    this.updateHint();
+  },
+
+  start(){
+    if(!$('recordOn').checked || !this.supported || !S.stream) return;
+    if(this.active) return;
+    try{
+      let videoTrack=null;
+      if($('recSource').value==='annotated' && canvas.captureStream){
+        if(renderMode.value!=='canvas'){
+          renderMode.value='canvas';
+          banner('info','骨格線つきで録画するため、映像の表示方式を「キャンバス描画」に切り替えました。');
+        }
+        videoTrack=canvas.captureStream(30).getVideoTracks()[0];
+      }else{
+        videoTrack=S.stream.getVideoTracks()[0];
+      }
+      const tracks=[videoTrack];
+      let hasAudio=false;
+      if(Voice.recDest && Voice.recDest.stream.getAudioTracks().length){
+        tracks.push(Voice.recDest.stream.getAudioTracks()[0]);
+        hasAudio=true;
+      }
+      const mixed=new MediaStream(tracks);
+      this.mime=this.pickMime(hasAudio);
+      const opt={videoBitsPerSecond:3000000};
+      if(hasAudio) opt.audioBitsPerSecond=128000;
+      if(this.mime) opt.mimeType=this.mime;
+      this.chunks=[];
+      this.recorder=new MediaRecorder(mixed,opt);
+      this.recorder.ondataavailable=e=>{ if(e.data && e.data.size) this.chunks.push(e.data); };
+      this.recorder.onerror=e=>{ this.lastError=String(e&&e.error||e); this.updateHint(); };
+      this.recorder.onstop=()=>{ this.save(); };
+      this.recorder.start(1000);
+      this.active=true;
+      $('recDot').classList.add('on');
+    }catch(e){
+      this.lastError=String(e&&e.message||e);
+      this.active=false; $('recDot').classList.remove('on');
+      banner('warn','録画を開始できませんでした：'+this.lastError);
+      this.updateHint();
+    }
+  },
+
+  /* discard=true なら保存せずに破棄する（計測を中断した場合） */
+  stop(discard){
+    if(!this.active || !this.recorder) return;
+    this.active=false;
+    this.discard=!!discard;
+    $('recDot').classList.remove('on');
+    try{ if(this.recorder.state!=='inactive') this.recorder.stop(); }catch(e){}
+  },
+
+  save(){
+    if(this.discard){ this.chunks=[]; this.discard=false; Bundle.videoDone(); return; }
+    if(!this.chunks.length){ Bundle.videoDone(); return; }
+    const blob=new Blob(this.chunks,{type:this.mime||'video/mp4'});
+    this.chunks=[];
+    const base=this.pendingBase||baseName();
+    Bundle.add(base+'.'+this.ext(), blob);
+    Bundle.videoDone();
+  }
+};
+Rec.init();
+$('recordOn').addEventListener('change',()=>Rec.updateHint());
+$('recSource').addEventListener('change',()=>Rec.updateHint());
+$('micOn').addEventListener('change',e=>{ e.target.checked ? Rec.enableMic() : Rec.disableMic(); });
+
+/* ===== 波形描画 ===== */
+const SIGNALS=[
+  {key:'kneeAngle',name:'膝関節角度',unit:'度',note:'側方モードの立位・座位判定に使用'},
+  {key:'hipAngle', name:'股関節角度',unit:'度',note:'側方モードの立位判定の補助に使用'},
+  {key:'ratio',    name:'前方比率',  unit:'%', note:'前方モードの立位・座位判定に使用'},
+  {key:'hipY',     name:'股関節 Y座標',unit:'正規化',note:'前方モードの比率算出に使用（0=画面上端, 1=下端）'},
+  {key:'kneeY',    name:'膝 Y座標',  unit:'正規化',note:'参考データ'},
+  {key:'ankY',     name:'足首 Y座標',unit:'正規化',note:'前方モードの比率算出に使用'},
+  {key:'shY',      name:'肩 Y座標',  unit:'正規化',note:'参考データ'},
+  {key:'hipX',     name:'股関節 X座標',unit:'正規化',note:'参考データ'},
+  {key:'kneeX',    name:'膝 X座標',  unit:'正規化',note:'参考データ'},
+  {key:'ankX',     name:'足首 X座標',unit:'正規化',note:'参考データ'},
+  {key:'vis',      name:'検出信頼度',unit:'0-1',note:'低い区間はデータの信頼性が落ちます'},
+  {key:'headOff',  name:'頭部の偏位',unit:'%',
+   note:'両足首の中点からの頭部の左右偏位（肩幅を100%とした比）。前方では正が対象者の左、側方では正が前方'},
+  {key:'trunkOff', name:'肩の偏位',  unit:'%', note:'両足首の中点からの肩中点の偏位。符号の意味は頭部と同じ'},
+  {key:'pelvisOff',name:'骨盤の偏位',unit:'%', note:'両足首の中点からの股関節中点の偏位。符号の意味は頭部と同じ'},
+  {key:'trunkTilt',name:'体幹の傾き',unit:'度',note:'股関節中点から肩中点へのベクトルの、鉛直からの傾き'},
+  {key:'shTilt',   name:'肩の水平傾き',unit:'度',note:'左右の肩を結ぶ線の水平からの傾き。正は左肩が下がっている'},
+  {key:'comRelX',  name:'重心の左右位置',unit:'倍',note:'両足首の中点を0とした重心の水平位置（肩幅を1とした比）'},
+  {key:'comRelY',  name:'重心の高さ',unit:'倍',note:'両足首の中点を0とした重心の高さ（肩幅を1とした比）'}
+];
+let activeSignal='kneeAngle';
+const repColor=i=>'hsl('+(i*36)+',62%,45%)';
+
+function repFrames(rep){
+  const end = (rep.downEnd!==null && rep.downEnd!==undefined) ? rep.downEnd : rep.upEnd;
+  return REC.frames.filter(f=>f.t>=rep.upStart-150 && f.t<=end+150);
+}
+function drawChart(cv, sigKey){
+  const sig=SIGNALS.find(s=>s.key===sigKey);
+  const dpr=window.devicePixelRatio||1;
+  const w=cv.clientWidth||320, h=220;
+  cv.width=w*dpr; cv.height=h*dpr;
+  const g=cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0);
+  g.clearRect(0,0,w,h);
+  const padL=46,padR=10,padT=12,padB=26;
+  const pw=w-padL-padR, ph=h-padT-padB;
+
+  const whole=optWhole.checked, norm=optNormalize.checked;
+  let series=[];
+  if(whole){
+    if(REC.frames.length) series=[{label:'全体',color:'#2c6e63',pts:REC.frames.map(f=>({x:f.t/1000,y:f[sigKey]}))}];
+  }else{
+    REC.reps.forEach((rep,i)=>{
+      const fr=repFrames(rep);
+      if(!fr.length) return;
+      const dur=((rep.downEnd!==null&&rep.downEnd!==undefined)?rep.downEnd:rep.upEnd)-rep.upStart;
+      series.push({label:(i+1)+'回目',color:repColor(i),
+        pts:fr.map(f=>({x: norm? ((f.t-rep.upStart)/Math.max(1,dur))*100 : (f.t-rep.upStart)/1000, y:f[sigKey]})),
+        markX: norm? ((rep.upEnd-rep.upStart)/Math.max(1,dur))*100 : (rep.upEnd-rep.upStart)/1000,
+        markY: (valueAt(rep.upEnd)||{})[sigKey]});
+    });
+  }
+  if(!series.length){
+    g.fillStyle='#9aaaa6'; g.font='12px sans-serif'; g.textAlign='center';
+    g.fillText('データがありません', w/2, h/2); return;
+  }
+  let xmin=Infinity,xmax=-Infinity,ymin=Infinity,ymax=-Infinity;
+  series.forEach(s=>s.pts.forEach(p=>{
+    if(!isFinite(p.x)||!isFinite(p.y)) return;
+    xmin=Math.min(xmin,p.x); xmax=Math.max(xmax,p.x);
+    ymin=Math.min(ymin,p.y); ymax=Math.max(ymax,p.y);
+  }));
+  if(!isFinite(xmin)){ return; }
+  if(xmax-xmin<1e-6) xmax=xmin+1;
+  const yPad=(ymax-ymin)*0.08||1; ymin-=yPad; ymax+=yPad;
+  const X=v=>padL+((v-xmin)/(xmax-xmin))*pw;
+  const Y=v=>padT+ph-((v-ymin)/(ymax-ymin))*ph;
+
+  /* 目盛 */
+  g.strokeStyle='#e4ebe8'; g.lineWidth=1;
+  g.fillStyle='#8b9a96'; g.font='10px '+"'SF Mono',monospace"; g.textAlign='right'; g.textBaseline='middle';
+  for(let i=0;i<=4;i++){
+    const v=ymin+(ymax-ymin)*i/4, y=Y(v);
+    g.beginPath(); g.moveTo(padL,y); g.lineTo(w-padR,y); g.stroke();
+    g.fillText(v.toFixed(Math.abs(ymax-ymin)<3?2:0), padL-6, y);
+  }
+  g.textAlign='center'; g.textBaseline='top';
+  for(let i=0;i<=4;i++){
+    const v=xmin+(xmax-xmin)*i/4, x=X(v);
+    g.fillText(v.toFixed(1), x, padT+ph+6);
+  }
+  g.fillStyle='#6b7d78'; g.textAlign='left';
+  g.fillText(sig.unit, 4, 4);
+  g.textAlign='right';
+  g.fillText(norm&&!whole?'サイクル進行 (%)':'時間 (秒)', w-padR, padT+ph+14);
+
+  /* しきい値線 */
+  const thStand = mode==='side'? +th.standAngle.value : +th.standRatio.value;
+  const thSit   = mode==='side'? +th.sitAngle.value   : +th.sitRatio.value;
+  const isJudge = (mode==='side'&&sigKey==='kneeAngle')||(mode==='front'&&sigKey==='ratio');
+  if(isJudge){
+    [[thStand,'#2c6e63','立位しきい値'],[thSit,'#b5502e','座位しきい値']].forEach(([v,c,lab])=>{
+      if(v<ymin||v>ymax) return;
+      g.strokeStyle=c; g.setLineDash([4,4]); g.lineWidth=1.2;
+      g.beginPath(); g.moveTo(padL,Y(v)); g.lineTo(w-padR,Y(v)); g.stroke();
+      g.setLineDash([]);
+      g.fillStyle=c; g.textAlign='left'; g.font='9px sans-serif';
+      g.fillText(lab, padL+4, Y(v)-8);
+    });
+  }
+
+  /* 波形 */
+  series.forEach(s=>{
+    g.strokeStyle=s.color; g.lineWidth=whole?1.4:1.6; g.globalAlpha=whole?1:.85;
+    g.beginPath(); let started=false;
+    s.pts.forEach(p=>{
+      if(!isFinite(p.x)||!isFinite(p.y)) return;
+      const x=X(p.x), y=Y(p.y);
+      if(!started){ g.moveTo(x,y); started=true; } else g.lineTo(x,y);
+    });
+    g.stroke(); g.globalAlpha=1;
+    if(s.markX!==undefined && isFinite(s.markY)){
+      g.fillStyle=s.color;
+      g.beginPath(); g.arc(X(s.markX),Y(s.markY),3,0,Math.PI*2); g.fill();
+    }
+  });
+}
+/* 重心の軌跡を2次元で描く。横軸=左右、縦軸=高さ。 */
+function drawTrajectory(cv){
+  const dpr=window.devicePixelRatio||1;
+  const w=cv.clientWidth||320, h=300;
+  cv.width=w*dpr; cv.height=h*dpr;
+  const g=cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0);
+  g.clearRect(0,0,w,h);
+  const padL=44,padR=12,padT=12,padB=30;
+  const pw=w-padL-padR, ph=h-padT-padB;
+
+  let series=[];
+  if(optWhole.checked){
+    const pts=REC.frames.filter(f=>isFinite(f.comRelX)&&isFinite(f.comRelY))
+      .map(f=>({x:f.comRelX,y:f.comRelY}));
+    if(pts.length) series=[{label:'全体',color:'#2c6e63',pts:pts}];
+  }else{
+    REC.reps.forEach((rep,i)=>{
+      const fr=repFrames(rep).filter(f=>isFinite(f.comRelX)&&isFinite(f.comRelY));
+      if(fr.length) series.push({label:(i+1)+'回目',color:repColor(i),
+        pts:fr.map(f=>({x:f.comRelX,y:f.comRelY})),
+        markPt:(()=>{const v=valueAt(rep.upEnd); return v&&isFinite(v.comRelX)?{x:v.comRelX,y:v.comRelY}:null;})()});
+    });
+  }
+  if(!series.length){
+    g.fillStyle='#9aaaa6'; g.font='12px sans-serif'; g.textAlign='center';
+    g.fillText('重心のデータがありません', w/2, h/2); return;
+  }
+  let xmin=Infinity,xmax=-Infinity,ymin=Infinity,ymax=-Infinity;
+  series.forEach(s=>s.pts.forEach(p=>{
+    xmin=Math.min(xmin,p.x); xmax=Math.max(xmax,p.x);
+    ymin=Math.min(ymin,p.y); ymax=Math.max(ymax,p.y);
+  }));
+  /* 左右方向は狭い範囲になりがちなので、最低限の幅を確保する */
+  const cx=(xmin+xmax)/2;
+  if(xmax-xmin<0.4){ xmin=cx-0.2; xmax=cx+0.2; }
+  const padX=(xmax-xmin)*0.15, padY=(ymax-ymin)*0.10||0.05;
+  xmin-=padX; xmax+=padX; ymin-=padY; ymax+=padY;
+  const X=v=>padL+((v-xmin)/(xmax-xmin))*pw;
+  const Y=v=>padT+ph-((v-ymin)/(ymax-ymin))*ph;
+
+  g.strokeStyle='#e4ebe8'; g.lineWidth=1;
+  g.fillStyle='#8b9a96'; g.font="10px 'SF Mono',monospace";
+  g.textAlign='right'; g.textBaseline='middle';
+  for(let i=0;i<=4;i++){
+    const v=ymin+(ymax-ymin)*i/4, y=Y(v);
+    g.beginPath(); g.moveTo(padL,y); g.lineTo(w-padR,y); g.stroke();
+    g.fillText(v.toFixed(2), padL-6, y);
+  }
+  g.textAlign='center'; g.textBaseline='top';
+  for(let i=0;i<=4;i++){
+    const v=xmin+(xmax-xmin)*i/4, x=X(v);
+    g.beginPath(); g.moveTo(x,padT); g.lineTo(x,padT+ph); g.stroke();
+    g.fillText(v.toFixed(2), x, padT+ph+6);
+  }
+  /* 足部中点（原点）を示す基準線 */
+  if(0>xmin&&0<xmax){
+    g.strokeStyle='#b5502e'; g.setLineDash([4,4]); g.lineWidth=1.2;
+    g.beginPath(); g.moveTo(X(0),padT); g.lineTo(X(0),padT+ph); g.stroke();
+    g.setLineDash([]);
+    g.fillStyle='#b5502e'; g.textAlign='left'; g.font='9px sans-serif';
+    g.fillText('両足首の中点', X(0)+4, padT+2);
+  }
+  g.fillStyle='#6b7d78'; g.font="10px 'SF Mono',monospace";
+  g.textAlign='right'; g.fillText(mode==='front'?'← 右　　左 →':'← 後　　前 →', w-padR, padT+ph+16);
+  g.save(); g.translate(11,padT+ph/2); g.rotate(-Math.PI/2);
+  g.textAlign='center'; g.fillText('高さ', 0,0); g.restore();
+
+  series.forEach(s=>{
+    g.strokeStyle=s.color; g.lineWidth=1.8; g.globalAlpha=.85;
+    g.beginPath();
+    s.pts.forEach((p,i)=>{ const x=X(p.x),y=Y(p.y); i?g.lineTo(x,y):g.moveTo(x,y); });
+    g.stroke(); g.globalAlpha=1;
+    /* 開始点を小さな四角、起立完了点を丸で示す */
+    const p0=s.pts[0];
+    g.fillStyle=s.color; g.fillRect(X(p0.x)-2.5,Y(p0.y)-2.5,5,5);
+    if(s.markPt){ g.beginPath(); g.arc(X(s.markPt.x),Y(s.markPt.y),3.5,0,Math.PI*2); g.fill(); }
+  });
+}
+
+function renderWave(){
+  waveBody.innerHTML='';
+  if(activeSignal==='__traj'){
+    const wrap=document.createElement('div'); wrap.className='chart-wrap';
+    const cv=document.createElement('canvas'); wrap.appendChild(cv);
+    waveBody.appendChild(wrap);
+    const cap=document.createElement('div'); cap.className='chart-cap';
+    cap.innerHTML='<b>重心の軌跡</b><br>'
+      +'Winterの身体分節パラメータ（各部位の質量比と重心位置）から全身の重心を推定し、'
+      +'両足首の中点を原点、肩幅を1とした相対座標で描いています。'
+      +'<br>■＝動作の開始点、●＝起立完了（立位到達）の時点です。'
+      +'<br>縦の破線が両足首の中点です。左右にどれだけ振れているか、'
+      +'各回で軌跡が揃っているかを見てください。';
+    waveBody.appendChild(cap);
+    const lg=document.createElement('div'); lg.className='legend';
+    if(!optWhole.checked) REC.reps.forEach((r,i)=>{
+      const sp=document.createElement('span');
+      sp.innerHTML='<i style="background:'+repColor(i)+'"></i>'+(i+1)+'回目';
+      lg.appendChild(sp);
+    });
+    waveBody.appendChild(lg);
+    requestAnimationFrame(()=>drawTrajectory(cv));
+    return;
+  }
+  const sig=SIGNALS.find(s=>s.key===activeSignal);
+  const wrap=document.createElement('div'); wrap.className='chart-wrap';
+  const cv=document.createElement('canvas'); wrap.appendChild(cv);
+  waveBody.appendChild(wrap);
+  const cap=document.createElement('div'); cap.className='chart-cap';
+  cap.innerHTML='<b>'+sig.name+'（'+sig.unit+'）</b><br>'+sig.note
+    +'<br>丸印は起立完了（立位到達）の時点です。';
+  waveBody.appendChild(cap);
+  if(!optWhole.checked){
+    const lg=document.createElement('div'); lg.className='legend';
+    REC.reps.forEach((r,i)=>{
+      const s=document.createElement('span');
+      s.innerHTML='<i style="background:'+repColor(i)+'"></i>'+(i+1)+'回目';
+      lg.appendChild(s);
+    });
+    waveBody.appendChild(lg);
+  }
+  requestAnimationFrame(()=>drawChart(cv,activeSignal));
+}
+function buildTabs(){
+  waveTabs.innerHTML='';
+  const traj=document.createElement('button');
+  traj.textContent='重心の軌跡';
+  if(activeSignal==='__traj') traj.classList.add('active');
+  traj.addEventListener('click',()=>{ activeSignal='__traj'; buildTabs(); renderWave(); });
+  waveTabs.appendChild(traj);
+  SIGNALS.forEach(s=>{
+    const b=document.createElement('button');
+    b.textContent=s.name;
+    if(s.key===activeSignal) b.classList.add('active');
+    b.addEventListener('click',()=>{ activeSignal=s.key; buildTabs(); renderWave(); });
+    waveTabs.appendChild(b);
+  });
+}
+$('waveBtn').addEventListener('click',()=>{
+  if(!REC.frames.length){ banner('info','先に計測を行ってください。波形は計測中に記録されたデータから作成します。'); return; }
+  activeSignal = mode==='side'?'kneeAngle':'ratio';
+  buildTabs(); renderWave();
+  waveModal.classList.add('show');
+});
+waveClose.addEventListener('click',()=>waveModal.classList.remove('show'));
+optNormalize.addEventListener('change',renderWave);
+optWhole.addEventListener('change',renderWave);
+window.addEventListener('resize',()=>{ if(waveModal.classList.contains('show')) renderWave(); });
+
+/* ===== CSV ===== */
+function stamp(){
+  const d=new Date(), p=n=>String(n).padStart(2,'0');
+  return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'_'+p(d.getHours())+p(d.getMinutes());
+}
+function downloadBlob(name,blob){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=name; a.style.display='none';
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); },1500);
+}
+function download(name,text){
+  downloadBlob(name, new Blob(['\uFEFF'+text],{type:'text/csv;charset=utf-8;'}));
+}
+function repOf(t){
+  for(const r of REC.reps){ if(t>=r.upStart && t<=r.downEnd) return r; }
+  return null;
+}
+function phaseOf(f){
+  const r=repOf(f.t);
+  if(r){ if(f.t<=r.upEnd) return '起立中'; if(f.t>=r.downStart) return '着座中'; return '立位保持'; }
+  return f.zone==='sit'?'座位':(f.zone==='stand'?'立位':'中間');
+}
+function csvTimeSeries(){
+  const nf=(v,d)=>(typeof v==='number'&&isFinite(v))?v.toFixed(d):'';
+  const head=['経過時間(秒)','回','局面','判定ゾーン','膝関節角度(度)','股関節角度(度)','前方比率(%)',
+    '肩X','肩Y','股関節X','股関節Y','膝X','膝Y','足首X','足首Y','検出信頼度','使用側',
+    '頭部偏位(%)','肩偏位(%)','骨盤偏位(%)','体幹傾き(度)','肩水平傾き(度)',
+    '重心X','重心Y','重心相対X(肩幅比)','重心相対Y(肩幅比)'];
+  const lines=[head.join(',')];
+  REC.frames.forEach(f=>{
+    const r=repOf(f.t);
+    lines.push([ (f.t/1000).toFixed(3), r?r.n:'', phaseOf(f), f.zone,
+      f.kneeAngle.toFixed(2), f.hipAngle.toFixed(2), f.ratio.toFixed(2),
+      f.shX.toFixed(5), f.shY.toFixed(5), f.hipX.toFixed(5), f.hipY.toFixed(5),
+      f.kneeX.toFixed(5), f.kneeY.toFixed(5), f.ankX.toFixed(5), f.ankY.toFixed(5),
+      f.vis.toFixed(3), f.side==='L'?'左':'右',
+      nf(f.headOff,2), nf(f.trunkOff,2), nf(f.pelvisOff,2), nf(f.trunkTilt,2), nf(f.shTilt,2),
+      nf(f.comX,5), nf(f.comY,5), nf(f.comRelX,4), nf(f.comRelY,4) ].join(','));
+  });
+  return lines.join('\n');
+}
+function csvSummary(){
+  const u=unitVel();
+  const num=a=>a.filter(v=>typeof v==='number'&&!isNaN(v));
+  const nz=v=>isNaN(v)?'':v.toFixed(2);
+  const fb=REC.reps.length?buildFeedback():null;
+  const lines=[];
+  lines.push('テスト種目,'+(testType==='cs30'?'CS-30（30秒椅子立ち上がりテスト）':'CS-10（10回立ち座りテスト）'));
+  const sid=safeName($('subjectId').value);
+  if(sid) lines.push('対象者ID・メモ,'+sid);
+  lines.push('年代,'+ageWord());
+  lines.push('性別,'+sexWord());
+  if(testType==='cs30'){
+    lines.push('結果（回数）,'+repCount);
+    const t=CS30_REF[sexKey()][ageKey()];
+    lines.push('5段階評価,'+(fb?GRADE_LABEL[fb.grade]+'（'+fb.grade+'）':''));
+    lines.push('基準値（優れている）,'+t[0]+'回以上');
+    lines.push('基準値（ふつうの範囲）,'+t[2]+'〜'+(t[1]-1)+'回');
+    lines.push('出典,中谷敏昭ほか 臨床スポーツ医学 20(3):349-355, 2003');
+  }else{
+    const total=REC.reps.length?REC.reps[REC.reps.length-1].upEnd/1000:0;
+    const five=REC.reps.length>=5?REC.reps[4].upEnd/1000:null;
+    lines.push('結果（10回の所要時間・秒）,'+total.toFixed(2));
+    lines.push('最初の5回の所要時間（秒）,'+(five!==null?five.toFixed(2):''));
+    lines.push('5回立ち上がりテストの目安（秒）,'+FTSST_CUT[ageKey()]);
+  }
+  if(fb) lines.push('判定コメント,'+fb.headline);
+  const ps=postureStats();
+  if(ps){
+    const u=mode==='front'?'（正=対象者の左 / 負=右）':'（正=前方 / 負=後方）';
+    lines.push('');
+    lines.push('■ 姿勢と重心'+u);
+    lines.push('項目,平均,標準偏差,最大');
+    lines.push(['頭部偏位(%)',ps.head.m.toFixed(2),ps.head.sd.toFixed(2),ps.head.max.toFixed(2)].join(','));
+    lines.push(['肩偏位(%)',ps.trunk.m.toFixed(2),ps.trunk.sd.toFixed(2),ps.trunk.max.toFixed(2)].join(','));
+    lines.push(['骨盤偏位(%)',ps.pelvis.m.toFixed(2),ps.pelvis.sd.toFixed(2),ps.pelvis.max.toFixed(2)].join(','));
+    lines.push(['体幹傾き(度)',ps.tilt.m.toFixed(2),ps.tilt.sd.toFixed(2),ps.tilt.max.toFixed(2)].join(','));
+    lines.push(['肩水平傾き(度)',ps.shTilt.m.toFixed(2),ps.shTilt.sd.toFixed(2),ps.shTilt.max.toFixed(2)].join(','));
+    lines.push(['頭部の判定',dirWord(ps.head.m,8)].join(','));
+    lines.push(['体幹の判定',tiltWord(ps.tilt.m,3)].join(','));
+    lines.push(['重心の水平振れ幅(肩幅比)',ps.comX.range.toFixed(4)].join(','));
+    lines.push(['重心の上下移動(肩幅比)',ps.comY.range.toFixed(4)].join(','));
+    lines.push(['重心の水平位置 平均(肩幅比)',ps.comX.m.toFixed(4)].join(','));
+    lines.push('重心の推定,Winterの身体分節パラメータによる全身重心');
+  }
+  if(typeof Rec!=='undefined' && Rec.lastFile) lines.push('録画ファイル,'+Rec.lastFile.replace(/,/g,' '));
+  lines.push('計測モード,'+(mode==='side'?'側方':'前方'));
+  lines.push('判定に使用した信号,'+(mode==='side'?'膝関節角度':'前方比率'));
+  lines.push('立位しきい値,'+(mode==='side'?th.standAngle.value+'度':th.standRatio.value+'%'));
+  lines.push('座位しきい値,'+(mode==='side'?th.sitAngle.value+'度':th.sitRatio.value+'%'));
+  lines.push('注記,起立時間は座位しきい値を離れてから立位しきい値に到達するまでの時間です');
+  if(REC.reps.some(r=>r.skelColor)){
+    lines.push('骨格線の色,'+REC.reps.map(r=>(r.n)+'回目:'+(r.skelColor||'')).join(' / '));
+  }
+  lines.push('');
+  lines.push(['回','起立開始(秒)','起立終了(秒)','起立時間(秒)','着座開始(秒)','着座終了(秒)','着座時間(秒)',
+    '1周期(秒)','起立平均速度('+u+')','着座平均速度('+u+')','起立ピーク速度('+u+')','着座ピーク速度('+u+')'].join(','));
+  REC.reps.forEach(r=>{
+    lines.push([r.n,(r.upStart/1000).toFixed(3),(r.upEnd/1000).toFixed(3),r.upDur.toFixed(3),
+      r.downStart!==null?(r.downStart/1000).toFixed(3):'', r.downEnd!==null?(r.downEnd/1000).toFixed(3):'',
+      isNaN(r.downDur)?'':r.downDur.toFixed(3), isNaN(r.cycle)?'':r.cycle.toFixed(3),
+      nz(r.upVel), nz(r.downVel), nz(r.upPeak), nz(r.downPeak)].join(','));
+  });
+  const up=num(REC.reps.map(r=>r.upDur)), dn=num(REC.reps.map(r=>r.downDur)), cy=num(REC.reps.map(r=>r.cycle));
+  const uv=num(REC.reps.map(r=>r.upVel)), dv=num(REC.reps.map(r=>r.downVel));
+  const up2=num(REC.reps.map(r=>r.upPeak)), dn2=num(REC.reps.map(r=>r.downPeak));
+  lines.push(['平均','','',nz(mean(up)),'','',nz(mean(dn)),nz(mean(cy)),
+    nz(mean(uv)),nz(mean(dv)),nz(mean(up2)),nz(mean(dn2))].join(','));
+  lines.push(['標準偏差','','',nz(sd(up)),'','',nz(sd(dn)),nz(sd(cy)),
+    nz(sd(uv)),nz(sd(dv)),nz(sd(up2)),nz(sd(dn2))].join(','));
+  return lines.join('\n');
+}
+/* 計測終了時に、動画と同じ名前でCSVを自動保存する。
+   ブラウザは連続ダウンロードをまとめて確認することがあるため、少し間隔をあける。 */
+function csvBlob(text){ return new Blob(['\uFEFF'+text],{type:'text/csv;charset=utf-8;'}); }
+function autoSaveCsv(){
+  if(!REC.reps.length) return;
+  const base=Rec.pendingBase||baseName();
+  const willRecord = $('recordOn').checked && Rec.supported && Rec.active;
+  Bundle.begin(base, willRecord);
+  if($('csvAuto').checked){
+    try{
+      Bundle.add(base+'_summary.csv', csvBlob(csvSummary()));
+      if($('csvKind').value==='both' && REC.frames.length){
+        Bundle.add(base+'_timeseries.csv', csvBlob(csvTimeSeries()));
+      }
+    }catch(e){
+      banner('warn','CSVの作成に失敗しました：'+String(e&&e.message||e));
+    }
+  }
+  Bundle.seal();   /* CSVはこれで出そろった。あとは動画を待つだけ */
+}
+
+$('csvTs').addEventListener('click',()=>{
+  if(!REC.frames.length){ banner('info','先に計測を行ってください。'); return; }
+  download('cs10_timeseries_'+stamp()+'.csv', csvTimeSeries());
+});
+$('csvSum').addEventListener('click',()=>{
+  if(!REC.reps.length){ banner('info','先に計測を行ってください。'); return; }
+  download('cs10_summary_'+stamp()+'.csv', csvSummary());
+});
+
+/* ===== 診断 ===== */
+async function permState(){
+  try{ if(navigator.permissions){ const p=await navigator.permissions.query({name:'camera'}); return p.state; } }catch(e){}
+  return '不明';
+}
+async function updateDiag(){
+  const tr=S.stream&&S.stream.getVideoTracks()[0];
+  const st=tr&&tr.getSettings?tr.getSettings():{};
+  const rows=[
+    ['httpsか',(window.isSecureContext?'はい':'いいえ'),window.isSecureContext],
+    ['カメラ権限',await permState(),true],
+    ['カメラ台数',String((S.cams||[]).length),(S.cams||[]).length>0],
+    ['映像トラック',tr?(tr.label||'名前なし')+' / '+tr.readyState:'なし',!!tr&&camScore(tr.label)>=0],
+    ['直近のカメラ誤り',S.camError||'なし',!S.camError],
+    ['解像度',(st.width||0)+' x '+(st.height||0),!!st.width],
+    ['video要素','readyState='+video.readyState+' / '+video.videoWidth+'x'+video.videoHeight+(video.paused?' / 一時停止中':' / 再生中'),video.readyState>=2&&!video.paused],
+    ['canvas',canvas.width+'x'+canvas.height,canvas.width>1],
+    ['描画フレーム数',String(S.frames),S.frames>0],
+    ['MediaPipe',S.poseReady?'動作中 (解析'+S.poseFrames+'フレーム)':(S.poseErr||'未初期化'),S.poseReady],
+    ['骨格検出',S.lastLandmarks?'検出中':'未検出',!!S.lastLandmarks],
+    ['記録フレーム数',String(REC.frames.length),true],
+    ['音声合成',Voice.supported?(Voice.chosen?Voice.chosen.name:'音声リスト取得中'):'非対応',Voice.supported]
+  ];
+  diagBox.innerHTML=rows.map(r=>'<span class="k">'+r[0]+':</span> <span class="'+(r[2]?'good':'bad')+'">'
+    +String(r[1]).replace(/</g,'&lt;')+'</span>').join('<br>');
+}
+setInterval(updateDiag,700); updateDiag();
+copyDiag.addEventListener('click',()=>{
+  const t=diagBox.innerText+'\nUA: '+navigator.userAgent;
+  if(navigator.clipboard) navigator.clipboard.writeText(t).then(()=>{copyDiag.textContent='コピーしました';setTimeout(()=>copyDiag.textContent='診断情報をコピー',1500);});
+});
+
+/* ===== インストール（Windows / Android / iPhone） ===== */
+const installRow=$('installRow'), installBtn=$('installBtn'), iosHint=$('iosHint');
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                   || window.matchMedia('(display-mode: window-controls-overlay)').matches
+                   || window.navigator.standalone === true;
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+            || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  if (!isStandalone) installRow.style.display = 'flex';
+});
+installBtn.addEventListener('click', async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  try { await deferredPrompt.userChoice; } catch(e) {}
+  deferredPrompt = null;
+  installRow.style.display = 'none';
+});
+window.addEventListener('appinstalled', () => {
+  installRow.style.display = 'none';
+  iosHint.className = 'banner';
+});
+/* iPhone/iPad は beforeinstallprompt が無いため手順を案内する */
+if (isIOS && !isStandalone) {
+  iosHint.className = 'banner info show';
+  iosHint.innerHTML = '<b>ホーム画面に追加するとアプリとして使えます。</b><br>'
+    + 'Safari下部の共有ボタン（□に↑）→「ホーム画面に追加」を選んでください。'
+    + '追加後はアイコンから全画面で起動し、オフラインでも動作します。';
+}
+
+applyTestType();
+if(!window.showDirectoryPicker){
+  /* フォルダ指定に対応していない端末では、その選択肢に印を付ける */
+  const o=$('saveMode').querySelector('option[value="folder"]');
+  if(o) o.textContent='フォルダに保存（この端末では非対応）';
+}
+Rec.updateHint();
+renderRepTable();
+initPose();
+
+})();
+</script>
+</body>
+</html>

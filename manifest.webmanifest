@@ -1,0 +1,45 @@
+{
+  "name": "CS-30 / CS-10 立ち座りテスト計測",
+  "short_name": "CS-30",
+  "description": "カメラで30秒椅子立ち上がりテスト（CS-30）と10回立ち座りテスト（CS-10）を自動計測し、基準値との比較を音声と文字でフィードバックします。",
+  "lang": "ja",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "id": "cs30-chair-stand-test",
+  "display": "standalone",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui"
+  ],
+  "orientation": "portrait",
+  "background_color": "#eef3f1",
+  "theme_color": "#2c6e63",
+  "categories": [
+    "health",
+    "medical",
+    "fitness",
+    "utilities"
+  ],
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
