@@ -36,8 +36,7 @@ self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
     await Promise.all(keys.map(k => {
-      // 同じgithub.ioの他のアプリ（ジャンプ計測など）のキャッシュは消さない
-      if ((k.startsWith('shell-cs30') || k.startsWith('cdn-cs30')) && k !== SHELL_CACHE && k !== CDN_CACHE) return caches.delete(k);
+      if (k !== SHELL_CACHE && k !== CDN_CACHE) return caches.delete(k);
     }));
     await self.clients.claim();
   })());

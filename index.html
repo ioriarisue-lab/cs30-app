@@ -125,6 +125,12 @@
   .rec-dot.on{display:block;animation:blink 1.4s ease-in-out infinite;}
   @keyframes blink{0%,100%{opacity:1;}50%{opacity:.35;}}
   @media (prefers-reduced-motion:reduce){.rec-dot.on{animation:none;}}
+  .metric.com .value{color:#7a4fb5;}
+  .live-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;}
+  .live-head select{padding:6px 8px;border-radius:7px;border:1px solid var(--line);background:#fff;
+                    font-size:12px;color:var(--ink);max-width:52%;}
+  .live-wrap{position:relative;width:100%;background:#fbfcfc;border:1px solid var(--line);border-radius:9px;overflow:hidden;}
+  .live-wrap canvas{width:100%;display:block;}
   .status-line{padding:0 18px 18px;font-size:11px;color:#7a8b86;text-align:center;line-height:1.7;}
 
   /* 波形モーダル */
@@ -214,6 +220,24 @@
     <div class="metric down"><div class="label">着座（直近）</div><div class="value small" id="downValue">--</div></div>
   </div>
 
+  <div class="readout second">
+    <div class="metric com"><div class="label" id="comXLabel">重心 左右</div><div class="value small" id="comXValue">--</div></div>
+    <div class="metric com"><div class="label">重心 高さ</div><div class="value small" id="comYValue">--</div></div>
+  </div>
+
+  <div class="panel" id="livePanel">
+    <div class="live-head">
+      <h3 style="margin:0;">重心の軌跡（リアルタイム）</h3>
+      <select id="liveView">
+        <option value="xy">軌跡（左右×高さ）</option>
+        <option value="y">高さの推移</option>
+        <option value="x">左右の推移</option>
+      </select>
+    </div>
+    <div class="live-wrap"><canvas id="liveCanvas"></canvas></div>
+    <div class="chart-cap" id="liveCap">両足首の中点を原点、肩幅を1とした相対座標です。</div>
+  </div>
+
   <div class="controls">
     <button class="btn start" id="startBtn">計測開始</button>
     <button class="btn reset" id="resetBtn">リセット</button>
@@ -267,6 +291,19 @@
         <option value="#ff7a00">オレンジ</option>
         <option value="#ffffff">白</option>
         <option value="#111111">黒</option>
+      </select>
+    </div>
+    <div class="row">
+      <label for="comOn">重心を映像に重ねて表示</label>
+      <label class="switch"><input type="checkbox" id="comOn" checked /><span class="slider"></span></label>
+    </div>
+    <div class="row">
+      <label for="trailSec">軌跡を残す長さ</label>
+      <select id="trailSec">
+        <option value="1.5">1.5秒</option>
+        <option value="3" selected>3秒</option>
+        <option value="5">5秒</option>
+        <option value="999">計測の全体</option>
       </select>
     </div>
     <div class="row">
@@ -1007,6 +1044,7 @@ function startSession(){
   repCount=0; REC.frames=[]; REC.reps=[];
   zone='unknown'; pendZone=null; pendN=0; tLeftSit=null; tLeftStand=null; pendingUp=null;
   fMin=null; fMax=null; startTs=null; clearInterval(timerId);
+  ComLive.clear(); drawLive(true); updateComReadout();
   applyTestType();
   upValue.textContent='--'; downValue.textContent='--';
   $('fbPanel').style.display='none';
@@ -1021,6 +1059,7 @@ function startSession(){
     if(myId!==sessionId) return;
     S.announcing=false; running=true;
     zone='unknown'; pendZone=null; pendN=0; tLeftSit=null; tLeftStand=null; pendingUp=null;
+    ComLive.clear();
     startTs=performance.now();
     timerId=setInterval(tick,100);
     startBtn.textContent='計測中…';
@@ -1094,6 +1133,7 @@ function resetSession(){
   repCount=0; zone='unknown'; pendZone=null; pendN=0; startTs=null;
   tLeftSit=null; tLeftStand=null; pendingUp=null;
   REC.frames=[]; REC.reps=[];
+  ComLive.clear(); drawLive(true); updateComReadout();
   applyTestType();
   upValue.textContent='--'; downValue.textContent='--';
   phaseTag.textContent='待機中';
@@ -1218,6 +1258,230 @@ $('skelColor').addEventListener('change',()=>{
   if($('skelColor').value!=='auto'){ SkelColor.current=$('skelColor').value; SkelColor.currentName='固定'; }
 });
 
+/* ===== 重心のリアルタイム表示 =====
+   毎フレームの重心を保持し、(1)カメラ映像への重ね描き (2)下のライブグラフ の両方に使う。
+   保持する長さは設定で変えられる（既定3秒）。計測の開始・リセットで消去する。 */
+const ComLive = {
+  trail: [],            /* {t, x, y, rx, ry, fx, fy} 画像座標と相対座標の両方を持つ */
+  maxSec: 3,
+  lastTs: null,
+  pathLen: 0,           /* 相対座標での総移動距離 */
+
+  clear(){ this.trail = []; this.pathLen = 0; this.lastTs = null; },
+
+  push(m, t){
+    if(!isFinite(m.comX) || !isFinite(m.comY)) return;
+    const now = (t !== null && t !== undefined) ? t : performance.now();
+    const prev = this.trail.length ? this.trail[this.trail.length - 1] : null;
+    if(prev && isFinite(prev.rx)){
+      this.pathLen += Math.hypot(m.comRelX - prev.rx, m.comRelY - prev.ry);
+    }
+    this.trail.push({ t: now, x: m.comX, y: m.comY, rx: m.comRelX, ry: m.comRelY,
+                      fx: m.footMidX, fy: m.footMidY });
+    /* 保持する長さを超えた分を捨てる */
+    const sec = Number($('trailSec').value);
+    if(sec < 900){
+      const cut = now - sec * 1000;
+      while(this.trail.length && this.trail[0].t < cut) this.trail.shift();
+    }else if(this.trail.length > 20000){
+      this.trail.shift();
+    }
+  },
+
+  /* 直近フレーム間の重心速度（相対座標の単位／秒） */
+  velocity(){
+    const n = this.trail.length;
+    if(n < 3) return NaN;
+    const a = this.trail[n - 3], b = this.trail[n - 1];
+    const dt = (b.t - a.t) / 1000;
+    if(dt <= 0) return NaN;
+    return Math.hypot(b.rx - a.rx, b.ry - a.ry) / dt;
+  },
+
+  /* ---- カメラ映像への重ね描き ---- */
+  drawOverlay(){
+    if(!$('comOn').checked || !this.trail.length) return;
+    const W = canvas.width, H = canvas.height;
+    const cur = this.trail[this.trail.length - 1];
+
+    ctx.save();
+    /* 両足首の中点を通る鉛直の基準線 */
+    if(isFinite(cur.fx)){
+      ctx.strokeStyle = 'rgba(181,80,46,0.75)';
+      ctx.lineWidth = Math.max(1.5, W / 320);
+      ctx.setLineDash([8, 7]);
+      ctx.beginPath();
+      ctx.moveTo(cur.fx * W, 0);
+      ctx.lineTo(cur.fx * W, H);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    /* 軌跡。古いほど薄く描く */
+    if(this.trail.length > 1){
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      for(let i = 1; i < this.trail.length; i++){
+        const a = this.trail[i - 1], b = this.trail[i];
+        const age = i / this.trail.length;          /* 0=古い 1=新しい */
+        ctx.strokeStyle = 'rgba(160,100,220,' + (0.12 + 0.68 * age).toFixed(3) + ')';
+        ctx.lineWidth = Math.max(1.5, (W / 190) * (0.45 + 0.55 * age));
+        ctx.beginPath();
+        ctx.moveTo(a.x * W, a.y * H);
+        ctx.lineTo(b.x * W, b.y * H);
+        ctx.stroke();
+      }
+    }
+
+    /* 現在位置。どんな背景でも見えるよう、白い縁取りをつける */
+    const cx = cur.x * W, cy = cur.y * H;
+    const r = Math.max(5, W / 64);
+    ctx.lineWidth = Math.max(2, W / 200);
+    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+    ctx.beginPath(); ctx.arc(cx, cy, r + ctx.lineWidth, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = 'rgba(122,79,181,0.92)';
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    /* 十字 */
+    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 1.9, cy); ctx.lineTo(cx + r * 1.9, cy);
+    ctx.moveTo(cx, cy - r * 1.9); ctx.lineTo(cx, cy + r * 1.9);
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
+/* ---- 下のライブグラフ ---- */
+const liveCv = $('liveCanvas');
+const liveCtx = liveCv.getContext('2d');
+
+let _liveLast = 0;
+function drawLive(force){
+  /* グラフは約15fpsで足りる。映像への重ね描きは毎フレームのまま。 */
+  const now = performance.now();
+  if(!force && now - _liveLast < 66) return;
+  _liveLast = now;
+  const dpr = window.devicePixelRatio || 1;
+  const w = liveCv.clientWidth || 300;
+  const view = $('liveView').value;
+  const h = view === 'xy' ? Math.round(w * 0.72) : Math.round(w * 0.46);
+  if(liveCv.width !== Math.round(w * dpr) || liveCv.height !== Math.round(h * dpr)){
+    liveCv.width = Math.round(w * dpr); liveCv.height = Math.round(h * dpr);
+    liveCv.style.height = h + 'px';
+  }
+  const g = liveCtx;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+
+  const pts = ComLive.trail.filter(p => isFinite(p.rx) && isFinite(p.ry));
+  if(pts.length < 2){
+    g.fillStyle = '#9aaaa6'; g.font = '12px sans-serif'; g.textAlign = 'center';
+    g.fillText(S.started ? '重心を検出しています…' : 'カメラを開始すると表示されます', w / 2, h / 2);
+    return;
+  }
+
+  const padL = 40, padR = 10, padT = 18, padB = 20;
+  const pw = w - padL - padR, ph = h - padT - padB;
+
+  let xs, ys, xlab, ylab;
+  if(view === 'xy'){
+    xs = pts.map(p => p.rx); ys = pts.map(p => p.ry);
+    xlab = mode === 'front' ? '← 右　左 →' : '← 後　前 →'; ylab = '高さ';
+  }else{
+    const t0 = pts[0].t;
+    xs = pts.map(p => (p.t - t0) / 1000);
+    ys = pts.map(p => view === 'y' ? p.ry : p.rx);
+    xlab = '秒'; ylab = view === 'y' ? '高さ' : (mode === 'front' ? '左右' : '前後');
+  }
+
+  let xmin = Math.min(...xs), xmax = Math.max(...xs);
+  let ymin = Math.min(...ys), ymax = Math.max(...ys);
+  /* 範囲が狭すぎると針が振れるだけになるので、最低幅を確保する */
+  const minSpanX = view === 'xy' ? 0.5 : 1.0;
+  if(xmax - xmin < minSpanX){ const c = (xmin + xmax) / 2; xmin = c - minSpanX / 2; xmax = c + minSpanX / 2; }
+  if(ymax - ymin < 0.3){ const c = (ymin + ymax) / 2; ymin = c - 0.15; ymax = c + 0.15; }
+  const px = (xmax - xmin) * 0.08, py = (ymax - ymin) * 0.10;
+  xmin -= px; xmax += px; ymin -= py; ymax += py;
+  const X = v => padL + ((v - xmin) / (xmax - xmin)) * pw;
+  const Y = v => padT + ph - ((v - ymin) / (ymax - ymin)) * ph;
+
+  /* 目盛 */
+  g.strokeStyle = '#e4ebe8'; g.lineWidth = 1;
+  g.fillStyle = '#8b9a96'; g.font = "10px 'SF Mono',monospace";
+  g.textAlign = 'right'; g.textBaseline = 'middle';
+  for(let i = 0; i <= 3; i++){
+    const v = ymin + (ymax - ymin) * i / 3, y = Y(v);
+    g.beginPath(); g.moveTo(padL, y); g.lineTo(w - padR, y); g.stroke();
+    g.fillText(v.toFixed(2), padL - 5, y);
+  }
+  /* 横軸の目盛。いちばん右は軸名と重なるので描かない */
+  g.textAlign = 'center'; g.textBaseline = 'top';
+  for(let i = 0; i <= 2; i++){
+    const v = xmin + (xmax - xmin) * i / 3;
+    g.fillText(v.toFixed(view === 'xy' ? 2 : 1), X(v), padT + ph + 4);
+  }
+  g.textAlign = 'right'; g.font = '10px sans-serif';
+  g.fillText(xlab, w - padR, padT + ph + 4);
+  /* 縦軸の名前は回転させず、左上に横書きで置く（縦書きの日本語は小さく潰れて読めないため） */
+  g.textAlign = 'left'; g.textBaseline = 'top';
+  g.fillText(ylab, padL - 32, 1);
+
+  /* 原点（両足首の中点）の基準線 */
+  const needX = (view === 'xy' || view === 'x');
+  if(needX){
+    const zv = view === 'xy' ? 0 : 0;
+    const at = view === 'xy' ? X(zv) : null;
+    if(view === 'xy' && 0 > xmin && 0 < xmax){
+      g.strokeStyle = '#b5502e'; g.setLineDash([4, 4]); g.lineWidth = 1.2;
+      g.beginPath(); g.moveTo(at, padT); g.lineTo(at, padT + ph); g.stroke();
+      g.setLineDash([]);
+    }else if(view === 'x' && 0 > ymin && 0 < ymax){
+      g.strokeStyle = '#b5502e'; g.setLineDash([4, 4]); g.lineWidth = 1.2;
+      g.beginPath(); g.moveTo(padL, Y(0)); g.lineTo(w - padR, Y(0)); g.stroke();
+      g.setLineDash([]);
+    }
+  }
+
+  /* 軌跡 */
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  for(let i = 1; i < pts.length; i++){
+    const age = i / pts.length;
+    g.strokeStyle = 'rgba(122,79,181,' + (0.15 + 0.75 * age).toFixed(3) + ')';
+    g.lineWidth = 1.2 + 1.6 * age;
+    g.beginPath();
+    g.moveTo(X(xs[i - 1]), Y(ys[i - 1]));
+    g.lineTo(X(xs[i]), Y(ys[i]));
+    g.stroke();
+  }
+  /* 現在位置 */
+  const lx = X(xs[xs.length - 1]), ly = Y(ys[ys.length - 1]);
+  g.fillStyle = '#7a4fb5';
+  g.beginPath(); g.arc(lx, ly, 4.5, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = '#fff'; g.lineWidth = 1.6;
+  g.beginPath(); g.arc(lx, ly, 4.5, 0, Math.PI * 2); g.stroke();
+}
+
+/* 数値の表示を更新する */
+function updateComReadout(){
+  const n = ComLive.trail.length;
+  if(!n){ $('comXValue').textContent = '--'; $('comYValue').textContent = '--'; return; }
+  const c = ComLive.trail[n - 1];
+  $('comXValue').textContent = isFinite(c.rx) ? (c.rx >= 0 ? '+' : '') + c.rx.toFixed(2) : '--';
+  $('comYValue').textContent = isFinite(c.ry) ? c.ry.toFixed(2) : '--';
+  $('comXLabel').textContent = mode === 'front' ? '重心 左右' : '重心 前後';
+}
+
+$('liveView').addEventListener('change', () => {
+  const v = $('liveView').value;
+  $('liveCap').textContent = v === 'xy'
+    ? '両足首の中点を原点、肩幅を1とした相対座標です。縦の破線が両足首の中点です。'
+    : '横軸は経過時間（秒）です。値は肩幅を1とした相対座標です。';
+  drawLive(true);
+});
+$('trailSec').addEventListener('change', () => drawLive(true));
+$('comOn').addEventListener('change', () => drawLive(true));
+window.addEventListener('resize', () => drawLive(true));
+
 /* ===== Pose ===== */
 function onResults(res){
   S.poseFrames++;
@@ -1232,12 +1496,20 @@ function onResults(res){
   const m=measure(res.poseLandmarks);
   const t=running&&startTs!==null ? performance.now()-startTs : null;
 
+  /* 重心をためて、映像とライブグラフに描く（計測していなくても表示する） */
+  ComLive.push(m, t);
+  ComLive.drawOverlay();
+  updateComReadout();
+  drawLive();
+
   if(running && t!==null && REC.frames.length<MAX_FRAMES){
     REC.frames.push({t:t,zone:zoneOf(m),kneeAngle:m.kneeAngle,hipAngle:m.hipAngle,ratio:m.ratio,
       shX:m.shX,shY:m.shY,hipX:m.hipX,hipY:m.hipY,kneeX:m.kneeX,kneeY:m.kneeY,ankX:m.ankX,ankY:m.ankY,
       vis:m.vis,side:m.side,
       headOff:m.headOff,trunkOff:m.trunkOff,pelvisOff:m.pelvisOff,trunkTilt:m.trunkTilt,shTilt:m.shTilt,
-      comX:m.comX,comY:m.comY,comRelX:m.comRelX,comRelY:m.comRelY});
+      comX:m.comX,comY:m.comY,comRelX:m.comRelX,comRelY:m.comRelY,
+      comVel:ComLive.velocity(),
+      footMidX:m.footMidX,footMidY:m.footMidY,scale:m.scale});
   }
   updateZone(zoneOf(m), t!==null?t:performance.now());
 
@@ -2015,7 +2287,8 @@ function csvTimeSeries(){
   const head=['経過時間(秒)','回','局面','判定ゾーン','膝関節角度(度)','股関節角度(度)','前方比率(%)',
     '肩X','肩Y','股関節X','股関節Y','膝X','膝Y','足首X','足首Y','検出信頼度','使用側',
     '頭部偏位(%)','肩偏位(%)','骨盤偏位(%)','体幹傾き(度)','肩水平傾き(度)',
-    '重心X','重心Y','重心相対X(肩幅比)','重心相対Y(肩幅比)'];
+    '重心X','重心Y','重心相対X(肩幅比)','重心相対Y(肩幅比)','重心速度(肩幅比/秒)',
+    '足首中点X','足首中点Y','尺度(肩幅)'];
   const lines=[head.join(',')];
   REC.frames.forEach(f=>{
     const r=repOf(f.t);
@@ -2025,7 +2298,8 @@ function csvTimeSeries(){
       f.kneeX.toFixed(5), f.kneeY.toFixed(5), f.ankX.toFixed(5), f.ankY.toFixed(5),
       f.vis.toFixed(3), f.side==='L'?'左':'右',
       nf(f.headOff,2), nf(f.trunkOff,2), nf(f.pelvisOff,2), nf(f.trunkTilt,2), nf(f.shTilt,2),
-      nf(f.comX,5), nf(f.comY,5), nf(f.comRelX,4), nf(f.comRelY,4) ].join(','));
+      nf(f.comX,5), nf(f.comY,5), nf(f.comRelX,4), nf(f.comRelY,4), nf(f.comVel,4),
+      nf(f.footMidX,5), nf(f.footMidY,5), nf(f.scale,5) ].join(','));
   });
   return lines.join('\n');
 }
@@ -2071,7 +2345,24 @@ function csvSummary(){
     lines.push(['重心の水平振れ幅(肩幅比)',ps.comX.range.toFixed(4)].join(','));
     lines.push(['重心の上下移動(肩幅比)',ps.comY.range.toFixed(4)].join(','));
     lines.push(['重心の水平位置 平均(肩幅比)',ps.comX.m.toFixed(4)].join(','));
+    const cv=REC.frames.map(f=>f.comVel).filter(v=>typeof v==='number'&&isFinite(v));
+    if(cv.length){
+      lines.push(['重心速度 平均(肩幅比/秒)',mean(cv).toFixed(4)].join(','));
+      lines.push(['重心速度 標準偏差',sd(cv).toFixed(4)].join(','));
+      lines.push(['重心速度 最大',Math.max.apply(null,cv).toFixed(4)].join(','));
+    }
+    /* 重心の総移動距離は、記録したフレームから求め直す（表示用の軌跡は一定時間で消えるため） */
+    let path=0;
+    for(let i=1;i<REC.frames.length;i++){
+      const a=REC.frames[i-1], b=REC.frames[i];
+      if(isFinite(a.comRelX)&&isFinite(b.comRelX)) path+=Math.hypot(b.comRelX-a.comRelX,b.comRelY-a.comRelY);
+    }
+    if(path>0){
+      lines.push(['重心の総移動距離(肩幅比)',path.toFixed(4)].join(','));
+      if(REC.reps.length) lines.push(['1回あたりの移動距離(肩幅比)',(path/REC.reps.length).toFixed(4)].join(','));
+    }
     lines.push('重心の推定,Winterの身体分節パラメータによる全身重心');
+    lines.push('重心座標の定義,重心X/Yは画面の正規化座標(0-1)。相対X/Yは両足首の中点を原点とし肩幅を1とした比');
   }
   if(typeof Rec!=='undefined' && Rec.lastFile) lines.push('録画ファイル,'+Rec.lastFile.replace(/,/g,' '));
   lines.push('計測モード,'+(mode==='side'?'側方':'前方'));
