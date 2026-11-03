@@ -153,6 +153,30 @@
   .legend{display:flex;flex-wrap:wrap;gap:6px 10px;padding:8px 2px 0;}
   .legend span{font-size:10px;font-family:var(--mono);color:#4d5d59;display:flex;align-items:center;gap:4px;}
   .legend i{width:14px;height:3px;border-radius:2px;display:inline-block;}
+
+  /* タブ */
+  .tabbar{display:flex;border-bottom:1px solid var(--line);background:#fff;}
+  .tabbar .tab{flex:1;padding:12px 6px;border:none;background:transparent;font-size:13px;font-weight:700;
+               color:#8a9a96;cursor:pointer;border-bottom:2px solid transparent;}
+  .tabbar .tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+  .pane{display:none;}
+  .pane.active{display:block;}
+  .sect{padding:16px 18px 0;font-size:11px;font-weight:700;color:#8a9a96;letter-spacing:.08em;}
+
+  /* 動作モードの選択 */
+  .run-row{display:flex;flex-direction:column;gap:8px;padding:8px 18px 0;}
+  .run-btn{text-align:left;padding:11px 14px;border-radius:10px;border:1px solid var(--line);background:#fff;cursor:pointer;}
+  .run-btn b{display:block;font-size:14px;color:#3d4d49;}
+  .run-btn span{display:block;font-size:11px;color:#7a8b86;margin-top:3px;line-height:1.55;}
+  .run-btn.active{background:var(--accent);border-color:var(--accent);}
+  .run-btn.active b{color:#fff;}
+  .run-btn.active span{color:#cfe3de;}
+
+  /* 解析の進捗 */
+  .prog{height:8px;border-radius:5px;background:#e4ebe8;margin-top:12px;overflow:hidden;display:none;}
+  .prog.show{display:block;}
+  .prog i{display:block;height:100%;width:0;background:var(--accent);}
+  .txt-in{flex:1;max-width:60%;padding:8px;border-radius:6px;border:1px solid var(--line);font-size:13px;}
 </style>
 </head>
 <body>
@@ -167,16 +191,37 @@
 
   <div class="banner" id="topBanner"></div>
 
+  <div class="tabbar">
+    <button class="tab active" id="tabInfo" data-pane="info">基本情報</button>
+    <button class="tab" id="tabMeasure" data-pane="measure">計測</button>
+  </div>
+
+<!-- ===================== 基本情報タブ ===================== -->
+<div class="pane active" id="paneInfo">
+
+  <div class="sect">動作モード</div>
+  <div class="run-row">
+    <button class="run-btn active" data-run="live">
+      <b>リアルタイム計測</b><span>カメラで撮りながら、回数と時間をその場で自動計測します</span></button>
+    <button class="run-btn" data-run="rec">
+      <b>撮影のみ</b><span>骨格は出さず、合図と時間だけ入れて動画を残します。あとから解析できます</span></button>
+    <button class="run-btn" data-run="ana">
+      <b>動画を解析</b><span>すでに撮ってある動画を読み込んで、回数と時間を計測します</span></button>
+  </div>
+
+  <div class="sect">テスト種目</div>
   <div class="mode-row">
     <button class="mode-btn active" data-test="cs30">CS-30（30秒で何回）</button>
     <button class="mode-btn" data-test="cs10">CS-10（10回で何秒）</button>
   </div>
 
+  <div class="sect">撮影方向</div>
   <div class="mode-row">
     <button class="mode-btn active" data-mode="side">側方から撮影</button>
     <button class="mode-btn" data-mode="front">前方から撮影</button>
   </div>
 
+  <div class="sect">対象者</div>
   <div class="profile-row">
     <select id="ageSel" aria-label="年代">
       <option value="20-29">20代</option><option value="30-39">30代</option>
@@ -190,6 +235,18 @@
     </select>
   </div>
 
+  <div class="sect">設定</div>
+  <div id="infoSettings"></div>
+
+  <div class="controls">
+    <button class="btn start" id="toMeasure">計測に進む</button>
+  </div>
+  <div class="status-line" id="infoHint"></div>
+</div>
+
+<!-- ===================== 計測タブ ===================== -->
+<div class="pane" id="paneMeasure">
+
   <div class="stage" id="stage">
     <video id="video" playsinline autoplay muted></video>
     <canvas id="overlay"></canvas>
@@ -199,7 +256,7 @@
     </div>
     <div class="big-count" id="bigCount"></div>
     <div class="cam-gate" id="camGate">
-      <p>カメラを起動します。<br>タップすると許可の確認が表示されます。</p>
+      <p id="camGateText">カメラを起動します。<br>タップすると許可の確認が表示されます。</p>
       <button id="camStartBtn">カメラを開始</button>
     </div>
     <div class="result-overlay" id="resultOverlay">
@@ -211,16 +268,47 @@
     </div>
   </div>
 
+  <div class="panel" id="anaPanel" style="display:none;">
+    <h3>動画を解析</h3>
+    <div class="row"><label for="anaFile" style="flex:0 0 auto;">動画ファイル</label>
+      <input type="file" id="anaFile" accept="video/*" style="flex:1;font-size:12px;min-width:0;" /></div>
+    <div class="row"><label for="anaSr">読み取る間隔</label>
+      <select id="anaSr">
+        <option value="30">30コマ/秒（細かい・時間がかかる）</option>
+        <option value="20" selected>20コマ/秒（標準）</option>
+        <option value="15">15コマ/秒（速い）</option>
+        <option value="10">10コマ/秒（最速・粗い）</option>
+      </select></div>
+    <div class="row"><label for="anaOrigin">0秒とする位置</label>
+      <select id="anaOrigin">
+        <option value="auto">最初の動き出し</option>
+        <option value="head">動画の先頭</option>
+        <option value="manual">時刻を指定する</option>
+      </select></div>
+    <div class="row" id="anaStartRow" style="display:none;">
+      <label for="anaStart">開始時刻（秒）</label>
+      <input type="number" id="anaStart" class="txt-in" value="0" min="0" step="0.1" style="max-width:40%;" /></div>
+    <div class="prog" id="anaProg"><i></i></div>
+    <div class="row">
+      <button class="mini-btn" id="anaRun" style="flex:1;">解析を開始</button>
+      <button class="mini-btn" id="anaStop" style="flex:0 0 auto;display:none;">中止</button>
+    </div>
+    <div class="row" id="anaRedoRow" style="display:none;">
+      <button class="mini-btn" id="anaRedo" style="flex:1;">しきい値を変えて計算し直す</button>
+    </div>
+    <div class="row"><label id="anaHint" style="font-size:11px;color:#7a8b86;line-height:1.7;">動画ファイルを選んでください。</label></div>
+  </div>
+
   <div class="readout">
     <div class="metric"><div class="label" id="countLabel">回数</div><div class="value count" id="countValue">0 回</div></div>
     <div class="metric"><div class="label" id="timeLabel">残り時間</div><div class="value" id="timeValue">30.0秒</div></div>
   </div>
-  <div class="readout second">
+  <div class="readout second" id="rowUpDown">
     <div class="metric up"><div class="label">起立（直近）</div><div class="value small" id="upValue">--</div></div>
     <div class="metric down"><div class="label">着座（直近）</div><div class="value small" id="downValue">--</div></div>
   </div>
 
-  <div class="readout second">
+  <div class="readout second" id="rowCom">
     <div class="metric com"><div class="label" id="comXLabel">重心 左右</div><div class="value small" id="comXValue">--</div></div>
     <div class="metric com"><div class="label">重心 高さ</div><div class="value small" id="comYValue">--</div></div>
   </div>
@@ -238,11 +326,11 @@
     <div class="chart-cap" id="liveCap">両足首の中点を原点、肩幅を1とした相対座標です。</div>
   </div>
 
-  <div class="controls">
+  <div class="controls" id="ctrlMain">
     <button class="btn start" id="startBtn">計測開始</button>
     <button class="btn reset" id="resetBtn">リセット</button>
   </div>
-  <div class="controls sub">
+  <div class="controls sub" id="ctrlSub">
     <button class="btn primary" id="waveBtn">波形を見る</button>
     <button class="btn" id="csvTs">CSV（時系列）</button>
     <button class="btn" id="csvSum">CSV（集計）</button>
@@ -263,12 +351,12 @@
     <div id="postBody"></div>
   </div>
 
-  <div class="panel">
+  <div class="panel" id="repPanel">
     <h3>1回ごとの結果</h3>
     <div id="repTableWrap"><div class="empty-note">計測するとここに表示されます</div></div>
   </div>
 
-  <details class="panel">
+  <details class="panel" id="camPanel">
     <summary>カメラの設定</summary>
     <div class="row">
       <label for="camSelect">使用するカメラ</label>
@@ -330,10 +418,9 @@
         <option value="raw">カメラ映像のみ</option>
       </select>
     </div>
-    <div class="row">
-      <label for="subjectId">対象者ID・メモ</label>
-      <input type="text" id="subjectId" placeholder="例: A001 / 初回" maxlength="40"
-             style="flex:1;max-width:60%;padding:8px;border-radius:6px;border:1px solid var(--line);font-size:13px;" />
+    <div class="row" id="subjRow">
+      <label for="subjectId">ファイル名に入ります</label>
+      <input type="text" id="subjectId" class="txt-in" placeholder="例: A001 / 初回" maxlength="40" />
     </div>
     <div class="row">
       <label for="saveMode">保存のしかた</label>
@@ -345,6 +432,10 @@
     </div>
     <div class="row" id="pickDirRow" style="display:none;">
       <button class="mini-btn" id="pickDirBtn" style="flex:1;">保存先フォルダを選ぶ</button>
+    </div>
+    <div class="row">
+      <label for="fixMp4">PowerPointで使える形式に変換する</label>
+      <label class="switch"><input type="checkbox" id="fixMp4" checked /><span class="slider"></span></label>
     </div>
     <div class="row">
       <label for="micOn">マイクの音声も録音する</label>
@@ -362,9 +453,18 @@
       </select>
     </div>
     <div class="row"><label id="recHint" style="font-size:11px;color:#7a8b86;line-height:1.7;">保存先：ダウンロードフォルダ</label></div>
+    <div class="row" style="border-top:1px solid #e4ebe8;padding-top:12px;margin-top:4px;">
+      <label style="font-size:11px;color:#7a8b86;line-height:1.7;">
+        すでに保存した動画がPowerPointに貼れないときは、ここから選ぶと変換し直します。
+      </label>
+    </div>
+    <div class="row">
+      <input type="file" id="fixFile" accept="video/mp4,.mp4" style="flex:1;font-size:12px;" />
+    </div>
+    <div class="row"><label id="fixHint" style="font-size:11px;color:#7a8b86;line-height:1.7;"></label></div>
   </details>
 
-  <details class="panel">
+  <details class="panel" id="voicePanel">
     <summary>音声の設定</summary>
     <div class="row"><label for="voiceOn">音声アナウンス</label>
       <label class="switch"><input type="checkbox" id="voiceOn" checked /><span class="slider"></span></label></div>
@@ -376,7 +476,7 @@
     <div class="row"><button class="mini-btn" id="testVoice" style="flex:1;">音声をテスト再生</button></div>
   </details>
 
-  <details class="panel">
+  <details class="panel" id="thPanel">
     <summary>判定しきい値を調整</summary>
     <div class="row"><label>立位角度(側方)</label><input type="range" id="thStandAngle" min="130" max="180" value="160" /><span class="val" id="thStandAngleVal">160</span></div>
     <div class="row"><label>座位角度(側方)</label><input type="range" id="thSitAngle" min="70" max="130" value="110" /><span class="val" id="thSitAngleVal">110</span></div>
@@ -391,6 +491,7 @@
   </details>
 
   <div class="status-line" id="statusLine">「カメラを開始」を押してください</div>
+</div><!-- /paneMeasure -->
 </div>
 
 <!-- 波形モーダル -->
@@ -459,6 +560,7 @@ function clearBanner(){ topBanner.className='banner'; }
 /* ===== 音声 ===== */
 const Voice={
   supported:('speechSynthesis' in window), unlocked:false, voices:[], chosen:null, audioCtx:null,
+  mute:false,   /* 動画解析の再計算中など、音を鳴らしたくない場面で立てる */
   init(){ if(!this.supported) return;
     this.load(); window.speechSynthesis.onvoiceschanged=()=>this.load();
     setTimeout(()=>this.load(),500); setTimeout(()=>this.load(),1500); },
@@ -483,7 +585,7 @@ const Voice={
         }
       }
     }catch(e){} },
-  say(t,{interrupt=false}={}){ if(!voiceOn.checked||!this.supported) return;
+  say(t,{interrupt=false}={}){ if(this.mute||!voiceOn.checked||!this.supported) return;
     try{ if(interrupt) window.speechSynthesis.cancel();
       if(window.speechSynthesis.paused) window.speechSynthesis.resume();
       const u=new SpeechSynthesisUtterance(t); u.lang='ja-JP'; u.rate=rateInput.value/100; u.volume=1;
@@ -492,7 +594,7 @@ const Voice={
   sayThen(t,cb){
     let done=false;
     const fire=()=>{ if(done) return; done=true; try{cb();}catch(e){} };
-    if(!voiceOn.checked||!this.supported){ setTimeout(fire,300); return; }
+    if(this.mute||!voiceOn.checked||!this.supported){ setTimeout(fire,this.mute?0:300); return; }
     try{
       window.speechSynthesis.cancel();
       if(window.speechSynthesis.paused) window.speechSynthesis.resume();
@@ -505,7 +607,7 @@ const Voice={
       setTimeout(fire,(t.length/(6.5*rate))*1000+900+2500);
     }catch(e){ fire(); }
   },
-  beep(f=880,d=.12,type='sine'){ if(!beepOn.checked||!this.audioCtx) return;
+  beep(f=880,d=.12,type='sine'){ if(this.mute||!beepOn.checked||!this.audioCtx) return;
     try{ const c=this.audioCtx; if(c.state==='suspended') c.resume();
       const o=c.createOscillator(), g=c.createGain(); o.type=type; o.frequency.value=f;
       g.gain.setValueAtTime(.0001,c.currentTime); g.gain.exponentialRampToValueAtTime(.3,c.currentTime+.01);
@@ -517,13 +619,15 @@ const Voice={
 Voice.init();
 ['pointerdown','touchstart','click'].forEach(ev=>document.addEventListener(ev,()=>Voice.unlock(),{once:true,passive:true}));
 voiceSelect.addEventListener('change',()=>{Voice.chosen=Voice.voices[voiceSelect.value];});
-testVoice.addEventListener('click',()=>{Voice.unlock();Voice.beep(880,.12);Voice.say('音声のテストです。しっかりまっすぐにたって。',{interrupt:true});});
+testVoice.addEventListener('click',()=>{Voice.unlock();Voice.beep(880,.12);Voice.say('音声のテストです。今から始めます。はいどうぞ。',{interrupt:true});});
 
 /* ===== 状態 ===== */
 const S={stream:null,pose:null,poseReady:false,poseErr:null,sending:false,raf:null,
          facing:'environment',deviceId:null,started:false,frames:0,poseFrames:0,lastLandmarks:null,
-         cams:[],camSig:'',camError:null,autoPicked:false,announcing:false};
+         cams:[],camSig:'',camError:null,autoPicked:false,announcing:false,recOnlyRunning:false};
 let mode='side', testType='cs30', running=false, repCount=0;
+/* 動作モード: live=リアルタイム計測 / rec=撮影のみ / ana=動画を解析 */
+let runMode='live';
 const TARGET=10;
 let startTs=null, timerId=null, sessionId=0;
 let lastT=performance.now(), fps=0;
@@ -532,6 +636,17 @@ let fMin=null,fMax=null;
 /* 記録 */
 const REC={frames:[],reps:[]};
 const MAX_FRAMES=40000;
+
+/* 1フレーム分の記録。リアルタイム計測と動画解析で同じ形にそろえる */
+function frameRow(m,t,vel){
+  return {t:t,zone:zoneOf(m),kneeAngle:m.kneeAngle,hipAngle:m.hipAngle,ratio:m.ratio,
+    shX:m.shX,shY:m.shY,hipX:m.hipX,hipY:m.hipY,kneeX:m.kneeX,kneeY:m.kneeY,ankX:m.ankX,ankY:m.ankY,
+    vis:m.vis,side:m.side,
+    headOff:m.headOff,trunkOff:m.trunkOff,pelvisOff:m.pelvisOff,trunkTilt:m.trunkTilt,shTilt:m.shTilt,
+    comX:m.comX,comY:m.comY,comRelX:m.comRelX,comRelY:m.comRelY,
+    comVel:vel,
+    footMidX:m.footMidX,footMidY:m.footMidY,scale:m.scale};
+}
 
 /* 3状態ゾーン管理 */
 let zone='unknown', pendZone=null, pendN=0;
@@ -655,7 +770,7 @@ function measure(lm){
   const comRelX = com? ((com.x-footMid.x)/scale)*signRef : NaN;
   const comRelY = com? ((footMid.y-com.y)/scale) : NaN;
 
-  return {side:s,kneeAngle,hipAngle,ratio,
+  return {side:s,kneeAngle,hipAngle,ratio,gap,
           shX:sh.x,shY:sh.y,hipX:hip.x,hipY:hip.y,kneeX:knee.x,kneeY:knee.y,ankX:ank.x,ankY:ank.y,vis,
           headOff,trunkOff,pelvisOff,trunkTilt,shTilt,
           comX,comY,comRelX,comRelY,
@@ -851,15 +966,17 @@ function onZoneConfirmed(nz,t){
     SkelColor.unlock();          /* 次の回の開始時に色を選び直す */
     upValue.textContent=rep.upDur.toFixed(2)+'秒';
     countValue.textContent = testType==='cs30' ? repCount+' 回' : repCount+' / '+TARGET;
+    if(ANA.replaying){
+      /* 動画からの一括計算中は、音と演出を省く（最後にまとめて表示する） */
+      if(testType==='cs10' && repCount>=TARGET) ANA.hitTarget=true;
+      return;
+    }
     popCount(repCount);
     renderRepTable();
+    /* 回数は画面と音（ビープ）だけで示す。読み上げはしない。
+       数えられていることを対象者に伝えると、動作そのものに影響するため。 */
     Voice.beep(880,.12);
-    if(testType==='cs10'){
-      if(repCount>=TARGET) finish();
-      else Voice.say(repCount+'回',{interrupt:true});
-    }else{
-      Voice.say(String(repCount),{interrupt:true});
-    }
+    if(testType==='cs10' && repCount>=TARGET) finish();
   }
 
   /* 座位に戻った時点で、直前の回の着座データを補う */
@@ -887,8 +1004,6 @@ function updateZone(nz,t){
 function popCount(n){ bigCount.textContent=n; bigCount.classList.remove('pop'); void bigCount.offsetWidth; bigCount.classList.add('pop'); }
 function showCue(t){ cueTag.classList.remove('go'); cueTag.textContent=t; cueTag.classList.add('show'); clearTimeout(showCue._t); showCue._t=setTimeout(()=>cueTag.classList.remove('show'),1800); }
 function goCue(t){ cueTag.textContent=t; cueTag.classList.add('show','go'); clearTimeout(showCue._t); showCue._t=setTimeout(()=>cueTag.classList.remove('show','go'),1400); }
-let lastCue=0; const CUE_CD=2800;
-function maybeCue(t){ const n=performance.now(); if(n-lastCue<CUE_CD) return; lastCue=n; showCue(t); Voice.beep(440,.1,'square'); Voice.say(t,{interrupt:true}); }
 
 const unitVel = ()=> mode==='side' ? '度/秒' : '%/秒';
 
@@ -1140,21 +1255,455 @@ function resetSession(){
   cueTag.classList.remove('show','go');
   $('fbPanel').style.display='none';
   $('postPanel').style.display='none';
-  resultOverlay.classList.remove('show'); startBtn.textContent='計測開始'; startBtn.disabled=false;
-  statusLine.textContent='モードを選んで「計測開始」を押してください';
+  resultOverlay.classList.remove('show');
+  startBtn.textContent = runMode==='rec' ? '撮影を開始' : '計測開始';
+  startBtn.disabled=false;
+  statusLine.textContent = runMode==='rec'
+    ? '準備ができたら「撮影を開始」を押してください'
+    : 'モードを選んで「計測開始」を押してください';
   renderRepTable();
   if(Voice.supported) window.speechSynthesis.cancel();
 }
-startBtn.addEventListener('click',startSession);
-resetBtn.addEventListener('click',resetSession);
+startBtn.addEventListener('click',()=>{
+  if(runMode==='rec'){ S.recOnlyRunning ? finishRecordOnly() : startRecordOnly(); }
+  else startSession();
+});
+resetBtn.addEventListener('click',()=>{
+  if(S.recOnlyRunning) cancelRecordOnly(); else resetSession();
+});
 resultClose.addEventListener('click',()=>resultOverlay.classList.remove('show'));
 modeButtons.forEach(b=>b.addEventListener('click',()=>{
   modeButtons.forEach(x=>x.classList.remove('active')); b.classList.add('active'); mode=b.dataset.mode; resetSession();
 }));
 testButtons.forEach(b=>b.addEventListener('click',()=>{
   testButtons.forEach(x=>x.classList.remove('active')); b.classList.add('active');
-  testType=b.dataset.test; resetSession();
+  testType=b.dataset.test; resetSession(); applyRunMode();
 }));
+
+/* ===== 撮影のみ =====
+   骨格の判定はせず、合図と時間だけを入れて動画を残す。
+   あとから「動画を解析」で読み込めば、同じ指標が得られる。 */
+let recOnlyTimer=null;
+
+function startRecordOnly(){
+  if(S.recOnlyRunning||S.announcing) return;
+  if(!S.started){ statusLine.textContent='先に「カメラを開始」を押してください'; return; }
+  if(!Rec.supported){ banner('warn','この端末は動画の録画に対応していません。'); return; }
+  Voice.unlock();
+  finalizePendingRecording(false);
+  if(!$('recordOn').checked){ $('recordOn').checked=true; Rec.updateHint(); }
+  $('recSource').value='raw';
+  const myId=++sessionId;
+  S.announcing=true; S.said10=false; S.lastCd=null;
+  startTs=null;
+  startBtn.textContent='アナウンス中…'; startBtn.disabled=true;
+  phaseTag.textContent='準備';
+  resultOverlay.classList.remove('show');
+  statusLine.textContent='アナウンスが終わってから撮影を開始します';
+  timeValue.textContent = testType==='cs30' ? '30.0秒' : '0.0秒';
+
+  Voice.sayThen('今から始めます。はいどうぞ。', ()=>{
+    if(myId!==sessionId) return;
+    S.announcing=false; S.recOnlyRunning=true;
+    startTs=performance.now();
+    recOnlyTimer=setInterval(recOnlyTick,100);
+    Rec.start();
+    Voice.beep(1200,.16);
+    goCue('スタート');
+    phaseTag.textContent='撮影中';
+    if(testType==='cs30'){
+      startBtn.textContent='撮影中…'; startBtn.disabled=true;
+      statusLine.textContent='30秒間、できるだけ速く立ち座りを繰り返してください';
+    }else{
+      startBtn.textContent='撮影を終了'; startBtn.disabled=false;
+      statusLine.textContent='10回おわったら「撮影を終了」を押してください';
+    }
+  });
+}
+
+function recOnlyTick(){
+  if(startTs===null) return;
+  const el=performance.now()-startTs;
+  if(testType==='cs30'){
+    const rem=Math.max(0,CS30_MS-el);
+    timeValue.textContent=(rem/1000).toFixed(1)+'秒';
+    if(!S.said10 && rem<=10000 && rem>0){ S.said10=true; Voice.say('残り10秒',{interrupt:true}); }
+    if(rem<=3000){
+      const sec=Math.ceil(rem/1000);
+      if(sec!==S.lastCd){ S.lastCd=sec; if(sec>0) Voice.beep(660,.1); }
+    }
+    if(rem<=0) finishRecordOnly();
+  }else{
+    timeValue.textContent=fmt(el);
+  }
+}
+
+function recOnlyBase(){
+  const test = testType==='cs30' ? 'CS30' : 'CS10';
+  const id = safeName($('subjectId').value);
+  const dir = mode==='side' ? 'side' : 'front';
+  return test+'_'+stamp()+(id?'_'+id:'')+'_'+dir+'_rec';
+}
+
+function finishRecordOnly(){
+  if(!S.recOnlyRunning) return;
+  sessionId++;
+  S.recOnlyRunning=false;
+  clearInterval(recOnlyTimer);
+  const base=recOnlyBase();
+  Rec.pendingBase=base;
+  Rec.finishing=true;
+  phaseTag.textContent='保存中';
+  statusLine.textContent='動画を保存しています…';
+  startBtn.textContent='撮影を開始'; startBtn.disabled=false;
+  Bundle.begin(base, Rec.supported && Rec.active);
+  Bundle.seal();
+  Voice.chime();
+
+  const endRec=()=>{
+    if(Rec.tailTimer){ clearTimeout(Rec.tailTimer); Rec.tailTimer=null; }
+    if(!Rec.finishing) return;
+    Rec.finishing=false;
+    Rec.stop(false);
+    phaseTag.textContent='待機中';
+    statusLine.textContent='保存しました。「動画を解析」モードで読み込むと計測できます';
+  };
+  Rec.tailTimer=setTimeout(endRec,30000);
+  setTimeout(()=>{ Voice.sayThen(testType==='cs30'?'終了です。':'撮影を終了します。',()=>setTimeout(endRec,900)); },400);
+}
+
+function cancelRecordOnly(){
+  sessionId++;
+  S.recOnlyRunning=false; S.announcing=false;
+  clearInterval(recOnlyTimer);
+  finalizePendingRecording(true);
+  phaseTag.textContent='待機中';
+  startBtn.textContent='撮影を開始'; startBtn.disabled=false;
+  timeValue.textContent = testType==='cs30' ? '30.0秒' : '0.0秒';
+  statusLine.textContent='撮影を取り消しました（動画は保存していません）';
+  if(Voice.supported) window.speechSynthesis.cancel();
+}
+
+/* ===== 動画を解析 =====
+   手順は2段階。
+   1) 動画を1コマずつ送って骨格を検出し、計測値だけをためる（ANA.raw）
+   2) ためた値に時刻の原点を決めて、リアルタイムと同じ判定を一気に流す
+   こうしておくと、しきい値を変えたときに読み取りをやり直さずに計算し直せる。 */
+const ANA={file:null, url:null, raw:[], capturing:false, replaying:false,
+           busy:false, cancel:false, hitTarget:false, lastDur:0};
+
+function anaHint(t){ const h=$('anaHint'); h.style.whiteSpace='pre-line'; h.textContent=t; }
+function anaProgress(p){
+  const bar=$('anaProg');
+  bar.classList.add('show');
+  bar.firstElementChild.style.width=Math.max(0,Math.min(100,p*100)).toFixed(1)+'%';
+}
+
+$('anaOrigin').addEventListener('change',()=>{
+  $('anaStartRow').style.display = $('anaOrigin').value==='manual' ? 'flex' : 'none';
+});
+$('anaFile').addEventListener('change',e=>{
+  const f=e.target.files && e.target.files[0];
+  ANA.file=f||null;
+  $('anaRedoRow').style.display='none';
+  if(!f){ anaHint('動画ファイルを選んでください。'); return; }
+  anaHint(f.name+'\n'+(f.size/1048576).toFixed(1)+'MB　「解析を開始」を押してください。');
+});
+
+function seekTo(t){
+  return new Promise(res=>{
+    let done=false;
+    const fin=()=>{ if(done) return; done=true; video.removeEventListener('seeked',fin); res(); };
+    video.addEventListener('seeked',fin);
+    try{ video.currentTime=t; }catch(e){ fin(); }
+    setTimeout(fin,1500);   /* シークが返ってこない端末に備える */
+  });
+}
+
+async function anaLoadVideo(){
+  stopCamera();
+  video.srcObject=null;
+  if(ANA.url){ URL.revokeObjectURL(ANA.url); ANA.url=null; }
+  ANA.url=URL.createObjectURL(ANA.file);
+  video.src=ANA.url; video.muted=true; video.loop=false; video.playsInline=true;
+  camGate.classList.add('hide');
+  await new Promise((res,rej)=>{
+    let done=false;
+    const ok=()=>{ if(done)return; done=true; cleanup(); res(); };
+    const ng=()=>{ if(done)return; done=true; cleanup(); rej(new Error('この動画を読み込めませんでした（形式が対応していない可能性があります）')); };
+    const cleanup=()=>{ video.removeEventListener('loadedmetadata',ok); video.removeEventListener('error',ng); };
+    video.addEventListener('loadedmetadata',ok); video.addEventListener('error',ng);
+    setTimeout(ng,15000);
+  });
+  canvas.width=video.videoWidth||640; canvas.height=video.videoHeight||480;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  let dur=video.duration;
+  if(!isFinite(dur)||dur<=0){
+    /* 長さが分からない動画（録画直後のWebMなど）は、末尾までシークして確定させる */
+    await seekTo(1e7);
+    dur=video.duration;
+    await seekTo(0);
+  }
+  if(!isFinite(dur)||dur<=0) throw new Error('動画の長さを取得できませんでした');
+  ANA.lastDur=dur;
+  return dur;
+}
+
+async function analyzeRun(){
+  if(ANA.busy) return;
+  if(!ANA.file){ banner('info','解析する動画ファイルを選んでください。'); return; }
+  ANA.busy=true; ANA.cancel=false; ANA.raw=[];
+  fMin=null; fMax=null;   /* 前方比率の基準範囲は、この動画の中だけで取り直す */
+  $('anaRun').disabled=true; $('anaStop').style.display='inline-block';
+  $('anaRedoRow').style.display='none';
+  resultOverlay.classList.remove('show');
+  anaProgress(0);
+  anaHint('動画を読み込んでいます…');
+  try{
+    if(!S.poseReady && !S.poseErr) await initPose();
+    if(S.poseErr) throw new Error('骨格検出を使えません（'+S.poseErr+'）');
+    const dur=await anaLoadVideo();
+    const sr=Number($('anaSr').value)||20;
+    const step=1/sr;
+    const total=Math.max(1,Math.floor(dur/step));
+    anaHint('骨格を読み取っています…（'+dur.toFixed(1)+'秒・'+sr+'コマ/秒）');
+    statusLine.textContent='動画を解析しています';
+    phaseTag.textContent='解析中';
+    ANA.capturing=true;
+    SkelColor.unlock();
+    let i=0;
+    for(let t=0; t<dur-1e-3; t+=step){
+      if(ANA.cancel) break;
+      await seekTo(t);
+      if(renderMode.value==='canvas') ctx.drawImage(video,0,0,canvas.width,canvas.height);
+      else ctx.clearRect(0,0,canvas.width,canvas.height);
+      try{ await S.pose.send({image:video}); }catch(e){}
+      i++;
+      if(i%3===0){
+        anaProgress(i/total);
+        fpsTag.textContent=Math.round(100*i/total)+'%';
+      }
+    }
+    ANA.capturing=false;
+    anaProgress(1); fpsTag.textContent='-- fps';
+    if(ANA.cancel){
+      anaHint('解析を中止しました。');
+      statusLine.textContent='解析を中止しました';
+      phaseTag.textContent='待機中';
+      return;
+    }
+    if(ANA.raw.length<10) throw new Error('人の姿勢をほとんど検出できませんでした。全身が写っているか、明るさや撮影方向をご確認ください。');
+    analyzeReplay(true);
+  }catch(e){
+    ANA.capturing=false;
+    anaHint('解析できませんでした：'+String(e&&e.message||e));
+    banner('warn','解析できませんでした：'+String(e&&e.message||e));
+    statusLine.textContent='解析できませんでした';
+    phaseTag.textContent='待機中';
+  }finally{
+    ANA.busy=false;
+    $('anaRun').disabled=false; $('anaStop').style.display='none';
+  }
+}
+
+/* 0秒とする位置を決める */
+function analyzeOrigin(){
+  const v=$('anaOrigin').value;
+  if(v==='head') return 0;
+  if(v==='manual') return Math.max(0,(parseFloat($('anaStart').value)||0)*1000);
+  /* 最初の動き出し：座位がしばらく続いたあと、初めて座位から外れた時刻 */
+  let sitRun=0;
+  for(let i=0;i<ANA.raw.length;i++){
+    const z=zoneOf(ANA.raw[i].m);
+    if(z==='sit'){ sitRun++; continue; }
+    if(sitRun>=CONFIRM) return ANA.raw[i].at;
+  }
+  return ANA.raw.length ? ANA.raw[0].at : 0;
+}
+
+/* ためた計測値に判定を流して、結果を表示する */
+function analyzeReplay(firstTime){
+  if(!ANA.raw.length) return;
+
+  /* 前方モードの比率は、股関節と足首の距離がどこまで伸び縮みしたかを基準にする。
+     リアルタイムでは範囲が少しずつ広がるため、最初のほうの比率は当てにならない。
+     動画では全体を見てから計算できるので、ここで全コマ分を取り直す。 */
+  if(mode==='front'){
+    let lo=Infinity, hi=-Infinity;
+    for(const fr of ANA.raw){
+      const g=fr.m.gap;
+      if(isFinite(g)){ if(g<lo) lo=g; if(g>hi) hi=g; }
+    }
+    if(hi>lo){
+      for(const fr of ANA.raw) fr.m.ratio=((fr.m.gap-lo)/Math.max(.001,hi-lo))*100;
+    }
+  }
+
+  /* 軌跡は動画の全体を残す（画面の設定は変えずに戻す） */
+  const keepTrail=$('trailSec').value;
+  $('trailSec').value='999';
+
+  repCount=0; REC.frames=[]; REC.reps=[];
+  zone='unknown'; pendZone=null; pendN=0; tLeftSit=null; tLeftStand=null; pendingUp=null;
+  ComLive.clear();
+  applyTestType();
+  upValue.textContent='--'; downValue.textContent='--';
+  $('fbPanel').style.display='none'; $('postPanel').style.display='none';
+
+  const t0=analyzeOrigin();
+  ANA.replaying=true; ANA.hitTarget=false;
+  Voice.mute=true; running=true;
+  let last=0;
+  for(const fr of ANA.raw){
+    const t=fr.at-t0;
+    if(t<0) continue;
+    if(testType==='cs30' && t>CS30_MS) break;
+    ComLive.push(fr.m,t);
+    REC.frames.push(frameRow(fr.m,t,ComLive.velocity()));
+    updateZone(zoneOf(fr.m),t);
+    last=t;
+    if(ANA.hitTarget) break;
+  }
+  running=false; ANA.replaying=false; Voice.mute=false;
+  $('trailSec').value=keepTrail;
+
+  /* 表示 */
+  const num=a=>a.filter(v=>typeof v==='number'&&!isNaN(v));
+  const up=num(REC.reps.map(r=>r.upDur)), dn=num(REC.reps.map(r=>r.downDur));
+  if(testType==='cs30'){
+    timeValue.textContent='0.0秒';
+    countValue.textContent=repCount+' 回';
+    resultTime.textContent=repCount+' 回';
+  }else{
+    const total=REC.reps.length?REC.reps[REC.reps.length-1].upEnd:last;
+    timeValue.textContent=fmt(total);
+    countValue.textContent=repCount+' / '+TARGET;
+    resultTime.textContent=fmt(total);
+  }
+  resultSub.innerHTML='起立 '+fx(mean(up))+' ± '+fx(sd(up))+' 秒<br>着座 '+fx(mean(dn))+' ± '+fx(sd(dn))+' 秒';
+  const fb=buildFeedback();
+  showFeedback(fb);
+  renderPosture();
+  renderRepTable();
+  drawLive(true);
+  updateComReadout();
+  resultOverlay.classList.add('show');
+  phaseTag.textContent='解析完了';
+
+  const t0s=(t0/1000).toFixed(2);
+  anaHint('解析しました。\n読み取ったコマ数 '+ANA.raw.length+'　0秒の位置 '+t0s+'秒'
+    +'\n回数 '+repCount+'回'
+    +'\nうまく数えられていないときは、撮影方向としきい値を見直して計算し直してください。');
+  $('anaRedoRow').style.display='flex';
+  statusLine.textContent='解析が完了しました。「波形を見る」やCSV出力が使えます';
+  if(firstTime){
+    Voice.sayThen(fb.speak,()=>{});
+  }
+  /* CSVの自動保存（動画は保存しない） */
+  if($('csvAuto').checked && REC.reps.length){
+    const nm=safeName(ANA.file?ANA.file.name.replace(/\.[^.]+$/,''):'video');
+    Rec.pendingBase=(testType==='cs30'?'CS30':'CS10')+'_'+nm+'_analysis';
+    autoSaveCsv();
+  }
+}
+
+$('anaRun').addEventListener('click',()=>{ Voice.unlock(); analyzeRun(); });
+$('anaStop').addEventListener('click',()=>{ ANA.cancel=true; });
+$('anaRedo').addEventListener('click',()=>analyzeReplay(false));
+
+/* ===== タブと動作モード ===== */
+function switchPane(name){
+  const info=name==='info';
+  $('paneInfo').classList.toggle('active',info);
+  $('paneMeasure').classList.toggle('active',!info);
+  $('tabInfo').classList.toggle('active',info);
+  $('tabMeasure').classList.toggle('active',!info);
+  window.scrollTo(0,0);
+}
+document.querySelectorAll('.tabbar .tab').forEach(b=>{
+  b.addEventListener('click',()=>switchPane(b.dataset.pane));
+});
+
+function applyRunMode(){
+  const live=runMode==='live', rec=runMode==='rec', ana=runMode==='ana';
+  $('anaPanel').style.display = ana?'block':'none';
+  $('camPanel').style.display = ana?'none':'block';
+  $('livePanel').style.display = rec?'none':'block';
+  $('rowUpDown').style.display = rec?'none':'flex';
+  $('rowCom').style.display = rec?'none':'flex';
+  $('repPanel').style.display = rec?'none':'block';
+  $('ctrlMain').style.display = ana?'none':'flex';
+  $('ctrlSub').style.display = rec?'none':'flex';
+  $('recPanel').style.display = ana?'none':'block';
+  $('countLabel').parentElement.style.display = rec?'none':'block';
+
+  startBtn.textContent = rec?'撮影を開始':'計測開始';
+  startBtn.disabled=false;
+  $('toMeasure').textContent = ana?'解析に進む':(rec?'撮影に進む':'計測に進む');
+
+  if(rec){
+    $('recordOn').checked=true;
+    $('recSource').value='raw';
+    $('recSource').disabled=true;
+    Rec.updateHint();
+  }else{
+    $('recSource').disabled=false;
+  }
+
+  $('infoHint').textContent =
+    live ? 'カメラで撮りながら計測します。種目・撮影方向・対象者を確認してから「計測に進む」を押してください。'
+  : rec  ? '骨格を出さずに、合図と時間だけ入れて動画を残します。計測はあとから「動画を解析」で行えます。'
+         : 'すでにある動画から計測します。撮影方向は動画に合わせて選んでください。';
+
+  if(ana){
+    stopCamera();
+    camGate.classList.remove('hide');
+    $('camGateText').innerHTML='下で動画ファイルを選び、<br>「解析を開始」を押してください。';
+    camStartBtn.style.display='none';
+    statusLine.textContent='動画ファイルを選んで「解析を開始」を押してください';
+    phaseTag.textContent='待機中';
+  }else{
+    if(ANA.url){ URL.revokeObjectURL(ANA.url); ANA.url=null; video.removeAttribute('src'); video.load(); }
+    $('camGateText').innerHTML='カメラを起動します。<br>タップすると許可の確認が表示されます。';
+    camStartBtn.style.display='';
+    if(!S.started) camGate.classList.remove('hide'); else camGate.classList.add('hide');
+    statusLine.textContent = S.started ? '準備ができたら開始してください' : '「カメラを開始」を押してください';
+  }
+  applyTestType();
+}
+
+document.querySelectorAll('.run-btn').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('.run-btn').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    runMode=b.dataset.run;
+    if(S.recOnlyRunning) cancelRecordOnly();
+    resetSession();
+    applyRunMode();
+  });
+});
+
+$('toMeasure').addEventListener('click',()=>{
+  Voice.unlock();
+  switchPane('measure');
+  if(runMode!=='ana' && !S.started) startCamera();
+});
+
+/* 設定のパネルは基本情報タブにまとめる */
+(function moveSettings(){
+  const box=$('infoSettings');
+  const card=document.createElement('div');
+  card.className='panel';
+  card.innerHTML='<h3>対象者ID・メモ</h3>';
+  card.appendChild($('subjRow'));
+  box.appendChild(card);
+  box.appendChild($('recPanel'));
+  box.appendChild($('voicePanel'));
+  box.appendChild($('thPanel'));
+  /* インストールの案内も基本情報タブに置く */
+  box.appendChild($('installRow'));
+  box.appendChild($('iosHint'));
+})();
 $('ageSel').addEventListener('change',()=>{ if(REC.reps.length) showFeedback(buildFeedback()); });
 $('sexSel').addEventListener('change',()=>{ if(REC.reps.length) showFeedback(buildFeedback()); });
 mirrorOn.addEventListener('change',()=>stage.classList.toggle('mirror',mirrorOn.checked));
@@ -1486,6 +2035,20 @@ window.addEventListener('resize', () => drawLive(true));
 function onResults(res){
   S.poseFrames++;
   S.lastLandmarks=res.poseLandmarks||null;
+
+  /* 動画解析の読み取り中は、判定せずに計測値だけをためる。
+     判定はすべて読み終えてから、時刻の原点を決めたうえで一括して行う。 */
+  if(ANA.capturing){
+    if(!res.poseLandmarks) return;
+    if(window.drawConnectors && window.POSE_CONNECTIONS){
+      SkelColor.evaluate(res.poseLandmarks,false);
+      drawConnectors(ctx,res.poseLandmarks,POSE_CONNECTIONS,{color:SkelColor.current,lineWidth:3});
+      drawLandmarks(ctx,res.poseLandmarks,{color:SkelColor.dotColor(),lineWidth:1,radius:2.5});
+    }
+    ANA.raw.push({at:video.currentTime*1000, m:measure(res.poseLandmarks)});
+    return;
+  }
+
   if(!res.poseLandmarks) return;
   if(window.drawConnectors && window.POSE_CONNECTIONS){
     /* 描画の前に色を決める（自動時、各回の開始時のみ評価される） */
@@ -1503,19 +2066,9 @@ function onResults(res){
   drawLive();
 
   if(running && t!==null && REC.frames.length<MAX_FRAMES){
-    REC.frames.push({t:t,zone:zoneOf(m),kneeAngle:m.kneeAngle,hipAngle:m.hipAngle,ratio:m.ratio,
-      shX:m.shX,shY:m.shY,hipX:m.hipX,hipY:m.hipY,kneeX:m.kneeX,kneeY:m.kneeY,ankX:m.ankX,ankY:m.ankY,
-      vis:m.vis,side:m.side,
-      headOff:m.headOff,trunkOff:m.trunkOff,pelvisOff:m.pelvisOff,trunkTilt:m.trunkTilt,shTilt:m.shTilt,
-      comX:m.comX,comY:m.comY,comRelX:m.comRelX,comRelY:m.comRelY,
-      comVel:ComLive.velocity(),
-      footMidX:m.footMidX,footMidY:m.footMidY,scale:m.scale});
+    REC.frames.push(frameRow(m,t,ComLive.velocity()));
   }
   updateZone(zoneOf(m), t!==null?t:performance.now());
-
-  if(running && mode==='side' && zone==='stand' && m.kneeAngle < (+th.standAngle.value)-20){
-    maybeCue('しっかりまっすぐにたって');
-  }
 }
 async function initPose(){
   if(typeof Pose==='undefined'){ S.poseErr='MediaPipeライブラリを読み込めませんでした（通信環境を確認）'; return; }
@@ -1629,6 +2182,8 @@ function loop(){
   S.frames++;
   if(renderMode.value==='canvas') ctx.drawImage(video,0,0,canvas.width,canvas.height);
   else ctx.clearRect(0,0,canvas.width,canvas.height);
+  /* 撮影のみのモードでは骨格を出さない（映像をそのまま残すため） */
+  if(runMode==='rec') return;
   if(S.poseReady && !S.sending){
     S.sending=true;
     S.pose.send({image:video}).catch(e=>{S.poseErr=String(e&&e.message||e);}).finally(()=>{S.sending=false;});
@@ -1664,6 +2219,375 @@ function baseName(){
   else if(REC.reps.length){ res='_'+(REC.reps[REC.reps.length-1].upEnd/1000).toFixed(1)+'s'; }
   return test+'_'+stamp()+(id?'_'+id:'')+res;
 }
+
+/* ===== fragmented MP4 → 通常のMP4 への変換 =====
+   MediaRecorder が出す MP4 は moof/mdat を並べた「細切れ形式」で、
+   PowerPoint などは読み込めないことが多い。
+   そこで、映像・音声のデータはそのままに、サンプル表(moov)を作り直して
+   先頭にまとめた「通常形式」のMP4へ組み替える。再エンコードしないので劣化しない。
+   あわせて、映像のフレーム間隔を一定(CFR)にそろえる。 */
+
+function remuxFragmentedMp4(buffer, opts){
+  opts = opts || {};
+  const u8 = new Uint8Array(buffer);
+  const dv = new DataView(buffer);
+
+  /* ---------- 箱の読み取り ---------- */
+  const type = o => String.fromCharCode(u8[o+4],u8[o+5],u8[o+6],u8[o+7]);
+  function boxes(start, end){
+    const out = [];
+    let p = start;
+    while(p + 8 <= end){
+      let size = dv.getUint32(p);
+      let hdr = 8;
+      if(size === 1){
+        if(p + 16 > end) break;
+        size = Number(dv.getBigUint64(p+8)); hdr = 16;
+      }else if(size === 0){
+        size = end - p;
+      }
+      if(size < hdr || p + size > end) break;
+      out.push({type:type(p), start:p, size:size, body:p+hdr, bodyEnd:p+size});
+      p += size;
+    }
+    return out;
+  }
+  const find = (list, t) => list.find(b => b.type === t);
+  const findAll = (list, t) => list.filter(b => b.type === t);
+  function path(list, ...names){
+    let cur = list, box = null;
+    for(const n of names){
+      box = find(cur, n);
+      if(!box) return null;
+      cur = boxes(box.body, box.bodyEnd);
+    }
+    return box;
+  }
+
+  const top = boxes(0, u8.length);
+  const moovBox = find(top, 'moov');
+  if(!moovBox) throw new Error('moov が見つかりません');
+  const moov = boxes(moovBox.body, moovBox.bodyEnd);
+
+  /* ---------- moov から各トラックの情報を読む ---------- */
+  const mvhd = find(moov, 'mvhd');
+  let movieTimescale = 1000;
+  if(mvhd){
+    const v = u8[mvhd.body];
+    movieTimescale = v === 1 ? dv.getUint32(mvhd.body+20) : dv.getUint32(mvhd.body+12);
+  }
+
+  const tracks = [];
+  for(const trakBox of findAll(moov, 'trak')){
+    const trak = boxes(trakBox.body, trakBox.bodyEnd);
+    const tkhd = find(trak, 'tkhd');
+    if(!tkhd) continue;
+    const tv = u8[tkhd.body];
+    const trackId = tv === 1 ? dv.getUint32(tkhd.body+20) : dv.getUint32(tkhd.body+12);
+    const wOff = tkhd.bodyEnd - 8;
+    const width = dv.getUint32(wOff) / 65536;
+    const height = dv.getUint32(wOff+4) / 65536;
+
+    const mdhd = path(trak, 'mdia', 'mdhd');
+    let timescale = 1000;
+    if(mdhd){
+      const mv = u8[mdhd.body];
+      timescale = mv === 1 ? dv.getUint32(mdhd.body+20) : dv.getUint32(mdhd.body+12);
+    }
+    const hdlr = path(trak, 'mdia', 'hdlr');
+    const handler = hdlr ? String.fromCharCode(u8[hdlr.body+8],u8[hdlr.body+9],u8[hdlr.body+10],u8[hdlr.body+11]) : '';
+    const stsd = path(trak, 'mdia', 'minf', 'stbl', 'stsd');
+    if(!stsd) continue;
+
+    /* stsd: version/flags(4) + entry_count(4) のあとに、サンプル記述が続く。
+       その4文字コード(avc1/hvc1/vp09/mp4a など)が、中に入っている符号化方式を表す。 */
+    let codec = '';
+    if(stsd.bodyEnd - stsd.body >= 16){
+      codec = String.fromCharCode(u8[stsd.body+12],u8[stsd.body+13],u8[stsd.body+14],u8[stsd.body+15]);
+    }
+
+    tracks.push({
+      id: trackId, timescale, handler, width, height, codec,
+      stsd: u8.subarray(stsd.body, stsd.bodyEnd),   /* 中身をそのまま引き継ぐ */
+      samples: [],
+      defaults: {duration:0, size:0, flags:0}
+    });
+  }
+  if(!tracks.length) throw new Error('トラックが見つかりません');
+
+  /* mvex/trex の既定値 */
+  const mvex = find(moov, 'mvex');
+  if(mvex){
+    for(const trex of findAll(boxes(mvex.body, mvex.bodyEnd), 'trex')){
+      const id = dv.getUint32(trex.body+4);
+      const t = tracks.find(x => x.id === id);
+      if(t) t.defaults = {
+        duration: dv.getUint32(trex.body+12),
+        size:     dv.getUint32(trex.body+16),
+        flags:    dv.getUint32(trex.body+20)
+      };
+    }
+  }
+
+  /* ---------- moof / mdat からサンプルを集める ---------- */
+  const isSync = flags => ((flags >> 16) & 0x1) === 0;   /* sample_is_non_sync_sample が0なら同期サンプル */
+
+  for(const moofBox of findAll(top, 'moof')){
+    const moof = boxes(moofBox.body, moofBox.bodyEnd);
+    for(const trafBox of findAll(moof, 'traf')){
+      const traf = boxes(trafBox.body, trafBox.bodyEnd);
+      const tfhd = find(traf, 'tfhd');
+      if(!tfhd) continue;
+      const tfFlags = dv.getUint32(tfhd.body) & 0xffffff;
+      let p = tfhd.body + 4;
+      const trackId = dv.getUint32(p); p += 4;
+      const track = tracks.find(x => x.id === trackId);
+      if(!track) continue;
+
+      let baseDataOffset = moofBox.start;      /* 既定は moof の先頭 */
+      if(tfFlags & 0x000001){ baseDataOffset = Number(dv.getBigUint64(p)); p += 8; }
+      if(tfFlags & 0x000002){ p += 4; }        /* sample_description_index */
+      let defDur = track.defaults.duration, defSize = track.defaults.size, defFlags = track.defaults.flags;
+      if(tfFlags & 0x000008){ defDur  = dv.getUint32(p); p += 4; }
+      if(tfFlags & 0x000010){ defSize = dv.getUint32(p); p += 4; }
+      if(tfFlags & 0x000020){ defFlags= dv.getUint32(p); p += 4; }
+
+      for(const trunBox of findAll(traf, 'trun')){
+        const version = u8[trunBox.body];
+        const trFlags = dv.getUint32(trunBox.body) & 0xffffff;
+        let q = trunBox.body + 4;
+        const count = dv.getUint32(q); q += 4;
+        let dataOffset = 0;
+        if(trFlags & 0x000001){ dataOffset = dv.getInt32(q); q += 4; }
+        let firstFlags = null;
+        if(trFlags & 0x000004){ firstFlags = dv.getUint32(q); q += 4; }
+
+        let pos = baseDataOffset + dataOffset;
+        for(let i = 0; i < count; i++){
+          let dur = defDur, size = defSize, flags = defFlags, cto = 0;
+          if(trFlags & 0x000100){ dur  = dv.getUint32(q); q += 4; }
+          if(trFlags & 0x000200){ size = dv.getUint32(q); q += 4; }
+          if(trFlags & 0x000400){ flags= dv.getUint32(q); q += 4; }
+          if(trFlags & 0x000800){
+            cto = version === 0 ? dv.getUint32(q) : dv.getInt32(q);
+            q += 4;
+          }
+          if(i === 0 && firstFlags !== null) flags = firstFlags;
+          track.samples.push({offset:pos, size, duration:dur, cto, sync:isSync(flags)});
+          pos += size;
+        }
+      }
+    }
+  }
+
+  const used = tracks.filter(t => t.samples.length);
+  if(!used.length) throw new Error('サンプルが見つかりません（細切れ形式ではない可能性）');
+
+  /* ---------- 映像のフレーム間隔を一定にそろえる ---------- */
+  const report = {tracks:[], cfr:false};
+  for(const t of used){
+    const n = t.samples.length;
+    let total = t.samples.reduce((s,x) => s + x.duration, 0);
+    if(t.handler === 'vide' && n > 1 && opts.constantFrameRate !== false){
+      if(!total || !isFinite(total)) total = n * (t.timescale / 30);
+      const per = Math.max(1, Math.round(total / n));
+
+      /* 表示の順番を保ったまま間隔をそろえる。
+         B-frame がある動画では、復号の順番と表示の順番が違う。
+         元のズレ量(cto)をそのまま使うと表示順が入れ替わってしまうので、
+         表示の順位を求め直してから、新しいズレ量を計算する。 */
+      const hasCto = t.samples.some(s => s.cto !== 0);
+      if(hasCto){
+        let dts = 0;
+        const pts = t.samples.map(s => { const v = dts + s.cto; dts += s.duration; return v; });
+        const order = pts.map((v,i) => [v,i]).sort((a,b) => a[0]-b[0] || a[1]-b[1]);
+        const rank = new Array(n);
+        order.forEach(([,i], r) => { rank[i] = r; });
+        /* ズレ量が負にならないよう全体をずらす（version 0 の ctts で書けるようにするため） */
+        let minCto = Infinity;
+        for(let i = 0; i < n; i++) minCto = Math.min(minCto, (rank[i] - i) * per);
+        const shift = minCto < 0 ? -minCto : 0;
+        for(let i = 0; i < n; i++) t.samples[i].cto = (rank[i] - i) * per + shift;
+      }
+      for(const s of t.samples) s.duration = per;
+      total = per * n;
+      report.cfr = true;
+      report.fps = +(t.timescale / per).toFixed(2);
+    }
+    t.totalDuration = total;
+    report.tracks.push({
+      handler: t.handler, codec: t.codec, samples: n,
+      seconds: +(total / t.timescale).toFixed(2),
+      fps: t.handler === 'vide' ? +(n / (total / t.timescale)).toFixed(2) : undefined
+    });
+    if(t.handler === 'vide'){
+      report.videoCodec = t.codec;
+      /* avc1/avc3 は H.264。PowerPoint が読めるのは基本これ。 */
+      report.h264 = (t.codec === 'avc1' || t.codec === 'avc3');
+    }
+  }
+
+  /* ---------- 書き出し ---------- */
+  const W = () => {
+    const parts = []; let len = 0;
+    return {
+      push(arr){ parts.push(arr); len += arr.length; return this; },
+      u8v(v){ const a = new Uint8Array(1); a[0] = v & 0xff; return this.push(a); },
+      u16(v){ const a = new Uint8Array(2); new DataView(a.buffer).setUint16(0,v); return this.push(a); },
+      u32(v){ const a = new Uint8Array(4); new DataView(a.buffer).setUint32(0,v>>>0); return this.push(a); },
+      i32(v){ const a = new Uint8Array(4); new DataView(a.buffer).setInt32(0,v); return this.push(a); },
+      u64(v){ const a = new Uint8Array(8); new DataView(a.buffer).setBigUint64(0,BigInt(v)); return this.push(a); },
+      str(s){ const a = new Uint8Array(s.length); for(let i=0;i<s.length;i++) a[i]=s.charCodeAt(i); return this.push(a); },
+      zero(n){ return this.push(new Uint8Array(n)); },
+      get length(){ return len; },
+      bytes(){ const out = new Uint8Array(len); let o = 0; for(const p of parts){ out.set(p,o); o += p.length; } return out; }
+    };
+  };
+  function box(name, ...payloads){
+    let len = 8; for(const p of payloads) len += p.length;
+    const w = W(); w.u32(len).str(name);
+    for(const p of payloads) w.push(p);
+    return w.bytes();
+  }
+  const full = (ver, flags, ...payloads) => {
+    const w = W(); w.u8v(ver).u8v((flags>>16)&0xff).u8v((flags>>8)&0xff).u8v(flags&0xff);
+    for(const p of payloads) w.push(p);
+    return w.bytes();
+  };
+  const MATRIX = (() => { const w = W();
+    w.u32(0x00010000).u32(0).u32(0).u32(0).u32(0x00010000).u32(0).u32(0).u32(0).u32(0x40000000);
+    return w.bytes(); })();
+
+  /* 各トラックのサンプル表 */
+  function stblFor(t, chunkOffset){
+    /* stts: 連続する同じ長さをまとめる */
+    const stts = []; let run = null;
+    for(const s of t.samples){
+      if(run && run.d === s.duration) run.c++;
+      else { run = {c:1, d:s.duration}; stts.push(run); }
+    }
+    const sttsW = W(); sttsW.u32(stts.length);
+    for(const r of stts) sttsW.u32(r.c).u32(r.d);
+
+    const szW = W(); szW.u32(0).u32(t.samples.length);
+    for(const s of t.samples) szW.u32(s.size);
+
+    const scW = W(); scW.u32(1).u32(1).u32(t.samples.length).u32(1);   /* 全サンプルを1チャンクにまとめる */
+
+    const children = [
+      box('stsd', t.stsd),
+      box('stts', full(0,0,sttsW.bytes()))
+    ];
+
+    if(t.handler === 'vide'){
+      const syncs = [];
+      t.samples.forEach((s,i) => { if(s.sync) syncs.push(i+1); });
+      /* すべて同期サンプルなら stss は不要（無い＝全部キーフレームの意味） */
+      if(syncs.length && syncs.length < t.samples.length){
+        const w = W(); w.u32(syncs.length);
+        for(const n of syncs) w.u32(n);
+        children.push(box('stss', full(0,0,w.bytes())));
+      }
+      if(t.samples.some(s => s.cto !== 0)){
+        const ctts = []; let r2 = null;
+        for(const s of t.samples){
+          if(r2 && r2.o === s.cto) r2.c++;
+          else { r2 = {c:1, o:s.cto}; ctts.push(r2); }
+        }
+        const neg = ctts.some(r => r.o < 0);
+        const w = W(); w.u32(ctts.length);
+        for(const r of ctts){ w.u32(r.c); neg ? w.i32(r.o) : w.u32(r.o); }
+        /* 値が非負なら version 0。こちらのほうが対応している再生機が多い */
+        children.push(box('ctts', full(neg ? 1 : 0, 0, w.bytes())));
+      }
+    }
+
+    children.push(box('stsc', full(0,0,scW.bytes())));
+    children.push(box('stsz', full(0,0,szW.bytes())));
+    if(chunkOffset > 0xffffffff){
+      const w = W(); w.u32(1).u64(chunkOffset);
+      children.push(box('co64', full(0,0,w.bytes())));
+    }else{
+      const w = W(); w.u32(1).u32(chunkOffset);
+      children.push(box('stco', full(0,0,w.bytes())));
+    }
+    return box('stbl', ...children);
+  }
+
+  function trakFor(t, chunkOffset, movieDur){
+    const tk = W();
+    tk.u32(0).u32(0).u32(t.id).u32(0).u32(movieDur).zero(8).u16(0)
+      .u16(0).u16(t.handler === 'soun' ? 0x0100 : 0).u16(0).push(MATRIX)
+      .u32(Math.round((t.width || 0) * 65536)).u32(Math.round((t.height || 0) * 65536));
+    const tkhd = box('tkhd', full(0, 0x000007, tk.bytes()));   /* enabled|inMovie|inPreview */
+
+    const md = W();
+    md.u32(0).u32(0).u32(t.timescale).u32(t.totalDuration).u16(0x55c4).u16(0);
+    const mdhd = box('mdhd', full(0,0,md.bytes()));
+
+    const hd = W();
+    hd.u32(0).str(t.handler).zero(12).str(t.handler === 'vide' ? 'VideoHandler' : 'SoundHandler').u8v(0);
+    const hdlr = box('hdlr', full(0,0,hd.bytes()));
+
+    const mh = t.handler === 'vide'
+      ? box('vmhd', full(0, 1, W().u16(0).u16(0).u16(0).u16(0).bytes()))
+      : box('smhd', full(0, 0, W().u16(0).u16(0).bytes()));
+
+    const dref = box('dref', full(0,0, W().u32(1).bytes(), box('url ', full(0,1))));
+    const dinf = box('dinf', dref);
+    const minf = box('minf', mh, dinf, stblFor(t, chunkOffset));
+    const mdia = box('mdia', mdhd, hdlr, minf);
+    return box('trak', tkhd, mdia);
+  }
+
+  /* 動画全体の長さ（movie timescale） */
+  const movieDur = Math.max(...used.map(t => Math.round(t.totalDuration / t.timescale * movieTimescale)));
+
+  const mv = W();
+  mv.u32(0).u32(0).u32(movieTimescale).u32(movieDur).u32(0x00010000).u16(0x0100)
+    .zero(10).push(MATRIX).zero(24).u32(Math.max(...used.map(t => t.id)) + 1);
+  const mvhdOut = box('mvhd', full(0,0,mv.bytes()));
+
+  /* mdat の中身は「トラックごとにまとめて」並べる。1トラック=1チャンクにできる。 */
+  const trackBytes = used.map(t => t.samples.reduce((s,x) => s + x.size, 0));
+  const mdatPayload = trackBytes.reduce((a,b) => a+b, 0);
+
+  const ftyp = box('ftyp', W().str('isom').u32(0x200).str('isom').str('iso2').str('avc1').str('mp41').bytes());
+
+  /* moov の大きさは中身の値に依らず一定なので、仮の位置で一度組んで大きさを測る */
+  const build = offsets => box('moov', mvhdOut, ...used.map((t,i) => trakFor(t, offsets[i], movieDur)));
+  let moovOut = build(used.map(() => 0));
+  const mdatStart = ftyp.length + moovOut.length + 8;
+  const offsets = []; let acc = mdatStart;
+  for(let i = 0; i < used.length; i++){ offsets.push(acc); acc += trackBytes[i]; }
+  moovOut = build(offsets);
+  if(ftyp.length + moovOut.length + 8 !== mdatStart) throw new Error('moov の大きさが安定しません');
+
+  /* 書き出し */
+  const outLen = mdatStart + mdatPayload;
+  const out = new Uint8Array(outLen);
+  out.set(ftyp, 0);
+  out.set(moovOut, ftyp.length);
+  const dvOut = new DataView(out.buffer);
+  dvOut.setUint32(ftyp.length + moovOut.length, mdatPayload + 8);
+  out[ftyp.length + moovOut.length + 4] = 0x6d; /* m */
+  out[ftyp.length + moovOut.length + 5] = 0x64; /* d */
+  out[ftyp.length + moovOut.length + 6] = 0x61; /* a */
+  out[ftyp.length + moovOut.length + 7] = 0x74; /* t */
+
+  let w = mdatStart;
+  for(const t of used){
+    for(const s of t.samples){
+      out.set(u8.subarray(s.offset, s.offset + s.size), w);
+      w += s.size;
+    }
+  }
+  if(w !== outLen) throw new Error('書き出した大きさが合いません');
+
+  report.bytes = outLen;
+  return {buffer: out.buffer, report};
+}
+
 
 /* ===== ZIPの生成 =====
    1回の計測でできた動画とCSVを1つのZIPにまとめる。
@@ -1824,7 +2748,7 @@ $('subjectId').addEventListener('change',()=>Rec.updateHint());
 const Rec={
   supported: (typeof MediaRecorder!=='undefined'),
   mime:'', recorder:null, chunks:[],
-  active:false, lastFile:null, lastError:null, discard:false, pendingBase:null,
+  active:false, lastFile:null, lastError:null, lastConv:null, discard:false, pendingBase:null,
   finishing:false, tailTimer:null,
   micStream:null, micSrc:null, micGain:null,
 
@@ -1889,6 +2813,10 @@ const Rec={
     if(this.ext()!=='mp4'){
       t+='\nこのブラウザはMP4での録画に対応していないためWebMで保存します。';
     }
+    if($('fixMp4').checked && this.ext()==='mp4'){
+      t+='\n保存するときに、PowerPointなどで読める通常のMP4へ作り直します（画質はそのまま）。';
+    }
+    if(this.lastConv) t+='\n直近の変換：'+this.lastConv;
     if(this.lastFile) t+='\n直近の保存：'+this.lastFile;
     if(this.lastError) t+='\n保存エラー：'+this.lastError;
     const h=$('recHint'); h.style.whiteSpace='pre-line'; h.textContent=t;
@@ -1976,20 +2904,77 @@ const Rec={
     try{ if(this.recorder.state!=='inactive') this.recorder.stop(); }catch(e){}
   },
 
+  /* 録画した動画を、必要なら通常形式のMP4に変換してから束に加える */
+  async finishSave(base, blob){
+    let out = blob, note = '';
+    if($('fixMp4').checked && this.ext() === 'mp4'){
+      try{
+        const r = remuxFragmentedMp4(await blob.arrayBuffer(), {});
+        out = new Blob([r.buffer], {type:'video/mp4'});
+        note = '通常のMP4に変換（' + (r.report.fps || '?') + 'fps固定）';
+        if(r.report.h264 === false){
+          note += '／映像が' + (r.report.videoCodec || '不明') + '形式のため、PowerPointで読めない場合があります';
+        }
+        this.lastConv = note;
+      }catch(e){
+        /* 変換できなくても録画そのものは残す */
+        note = '変換できませんでした（' + String(e && e.message || e) + '）。録画したままの形式で保存します';
+        this.lastConv = note;
+      }
+    }else if(this.ext() !== 'mp4'){
+      this.lastConv = 'WebM形式です。PowerPointは読めないことがあります';
+    }else{
+      this.lastConv = '変換なし（録画したままの形式）';
+    }
+    this.updateHint();
+    Bundle.add(base + '.' + this.ext(), out);
+    Bundle.videoDone();
+  },
+
   save(){
     if(this.discard){ this.chunks=[]; this.discard=false; Bundle.videoDone(); return; }
     if(!this.chunks.length){ Bundle.videoDone(); return; }
     const blob=new Blob(this.chunks,{type:this.mime||'video/mp4'});
     this.chunks=[];
     const base=this.pendingBase||baseName();
-    Bundle.add(base+'.'+this.ext(), blob);
-    Bundle.videoDone();
+    this.finishSave(base, blob);
   }
 };
 Rec.init();
 $('recordOn').addEventListener('change',()=>Rec.updateHint());
 $('recSource').addEventListener('change',()=>Rec.updateHint());
 $('micOn').addEventListener('change',e=>{ e.target.checked ? Rec.enableMic() : Rec.disableMic(); });
+$('fixMp4').addEventListener('change',()=>Rec.updateHint());
+
+/* すでに保存した動画を、あとから通常のMP4に作り直す */
+$('fixFile').addEventListener('change', async e => {
+  const f = e.target.files && e.target.files[0];
+  if(!f) return;
+  const hint = $('fixHint');
+  hint.style.whiteSpace = 'pre-line';
+  hint.textContent = '変換しています…（' + f.name + '）';
+  try{
+    const r = remuxFragmentedMp4(await f.arrayBuffer(), {});
+    const name = f.name.replace(/\.mp4$/i, '') + '_PowerPoint用.mp4';
+    downloadBlob(name, new Blob([r.buffer], {type:'video/mp4'}));
+    const v = r.report.tracks.find(t => t.handler === 'vide') || {};
+    let msg = '変換しました：' + name
+      + '\n映像 ' + (v.codec || '?') + ' / ' + (v.samples || 0) + 'フレーム / '
+      + (r.report.fps || '?') + 'fps固定 / ' + (v.seconds || 0) + '秒';
+    if(r.report.h264 === false){
+      msg += '\n※ 映像が' + (r.report.videoCodec || '不明')
+           + '形式です。形式としては直りましたが、PowerPointはこの映像方式を読めないことがあります。';
+    }
+    hint.textContent = msg;
+  }catch(err){
+    const m = String(err && err.message || err);
+    hint.textContent = '変換できませんでした：' + m
+      + (/細切れ|moov|サンプル/.test(m)
+          ? '\nすでに通常のMP4である可能性があります。その場合は変換の必要はありません。'
+          : '');
+  }
+  e.target.value = '';
+});
 
 /* ===== 波形描画 ===== */
 const SIGNALS=[
@@ -2494,6 +3479,7 @@ if(!window.showDirectoryPicker){
 }
 Rec.updateHint();
 renderRepTable();
+applyRunMode();
 initPose();
 
 })();
