@@ -5,7 +5,7 @@
    3) PWA としてインストール可能にする（fetch ハンドラが必須のため）
 */
 
-const VERSION = 'cs30-v1.2.0';
+const VERSION = 'cs30-v1.5.0';
 const SHELL_CACHE = 'shell-' + VERSION;
 const CDN_CACHE   = 'cdn-' + VERSION;
 

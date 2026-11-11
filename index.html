@@ -250,6 +250,7 @@
   <div class="stage" id="stage">
     <video id="video" playsinline autoplay muted></video>
     <canvas id="overlay"></canvas>
+    <canvas id="roiCv" style="position:absolute;inset:0;width:100%;height:100%;display:none;touch-action:none;z-index:6;"></canvas>
     <div class="stage-overlay">
       <div class="tag-row"><div class="phase-tag" id="phaseTag">待機中</div><div class="rec-dot" id="recDot">● REC</div></div>
       <div class="cue" id="cueTag"></div>
@@ -282,12 +283,32 @@
     <div class="row"><label for="anaOrigin">0秒とする位置</label>
       <select id="anaOrigin">
         <option value="auto">最初の動き出し</option>
+        <option value="light">光刺激の点灯</option>
         <option value="head">動画の先頭</option>
         <option value="manual">時刻を指定する</option>
       </select></div>
     <div class="row" id="anaStartRow" style="display:none;">
       <label for="anaStart">開始時刻（秒）</label>
       <input type="number" id="anaStart" class="txt-in" value="0" min="0" step="0.1" style="max-width:40%;" /></div>
+
+    <div class="row" style="border-top:1px solid var(--line);padding-top:10px;margin-top:4px;">
+      <label for="lightOn">光刺激を検出する（3次元動作解析との同期用）</label>
+      <label class="switch"><input type="checkbox" id="lightOn" /><span class="slider"></span></label>
+    </div>
+    <div id="lightBox" style="display:none;">
+      <div class="row">
+        <button class="mini-btn" id="roiBtn" style="flex:1;">光が映る範囲を指定</button>
+        <button class="mini-btn" id="roiClear" style="flex:0 0 auto;">全画面に戻す</button>
+      </div>
+      <div class="row"><label id="roiHint" style="font-size:11px;color:#7a8b86;line-height:1.7;">範囲は画面の上をなぞって決めます。指定しない場合は画面全体の明るさで判定します。</label></div>
+      <canvas id="lightChart" style="width:100%;height:120px;display:none;border-radius:8px;border:1px solid var(--line);margin-top:6px;"></canvas>
+      <div class="row" id="lightThRow" style="display:none;">
+        <label for="lightTh">点灯と判定する高さ</label>
+        <input type="range" id="lightTh" min="10" max="90" value="50" /><span class="val" id="lightThVal">50</span>
+      </div>
+      <div class="row"><label id="lightHint" style="font-size:11px;color:var(--accent);line-height:1.7;font-weight:700;"></label></div>
+    </div>
+
     <div class="prog" id="anaProg"><i></i></div>
     <div class="row">
       <button class="mini-btn" id="anaRun" style="flex:1;">解析を開始</button>
@@ -478,10 +499,20 @@
 
   <details class="panel" id="thPanel">
     <summary>判定しきい値を調整</summary>
-    <div class="row"><label>立位角度(側方)</label><input type="range" id="thStandAngle" min="130" max="180" value="160" /><span class="val" id="thStandAngleVal">160</span></div>
-    <div class="row"><label>座位角度(側方)</label><input type="range" id="thSitAngle" min="70" max="130" value="110" /><span class="val" id="thSitAngleVal">110</span></div>
+    <div class="row"><label>立位の膝屈曲(側方)</label><input type="range" id="thStandAngle" min="0" max="50" value="20" /><span class="val" id="thStandAngleVal">20</span></div>
+    <div class="row"><label>座位の膝屈曲(側方)</label><input type="range" id="thSitAngle" min="50" max="110" value="70" /><span class="val" id="thSitAngleVal">70</span></div>
+    <div class="row"><label style="font-size:11px;color:#7a8b86;line-height:1.7;">
+      角度は臨床の表記（伸展位＝0度、屈曲するほど大きい）です。膝屈曲が立位の値以下になったら立位、座位の値以上になったら座位と判定します。
+    </label></div>
     <div class="row"><label>立位比率(前方)</label><input type="range" id="thStandRatio" min="50" max="95" value="80" /><span class="val" id="thStandRatioVal">80</span></div>
     <div class="row"><label>座位比率(前方)</label><input type="range" id="thSitRatio" min="5" max="50" value="30" /><span class="val" id="thSitRatioVal">30</span></div>
+    <div class="row" style="border-top:1px solid var(--line);padding-top:10px;margin-top:4px;">
+      <label for="useExtrema">1回ごとの時間を波形の山谷から出す（案②）</label>
+      <label class="switch"><input type="checkbox" id="useExtrema" checked /><span class="slider"></span></label>
+    </div>
+    <div class="row"><label style="font-size:11px;color:#7a8b86;line-height:1.7;">
+      しきい値で区切ると、動作の真ん中しか拾えないため時間が短く出ます。膝屈曲角の波形の山（座りきった点）から谷（立ちきった点）までで測ると、しきい値に依存せず、長さが実際の動作時間と一致します。回数の判定はどちらでも変わりません。CSVには両方の値が入ります。
+    </label></div>
   </details>
 
   <details class="panel">
@@ -777,10 +808,15 @@ function measure(lm){
           footMidX:footMid.x,footMidY:footMid.y,scale:scale,signRef:signRef};
 }
 
+/* 角度の表記変換。内部は内角（伸展位＝180度）で計算し、
+   画面・CSV・しきい値は臨床の屈曲角（伸展位＝0度）で扱う。 */
+const flex = v => (typeof v==='number' && isFinite(v)) ? 180-v : v;
+
 /* しきい値からゾーンを決める */
 function zoneOf(m){
   if(mode==='side'){
-    const st=+th.standAngle.value, si=+th.sitAngle.value;
+    /* しきい値は屈曲角で持っているので、内角に戻してから比べる */
+    const st=180-(+th.standAngle.value), si=180-(+th.sitAngle.value);
     if(m.kneeAngle>=st && m.hipAngle>=st-15) return 'stand';
     if(m.kneeAngle<=si) return 'sit';
     return 'mid';
@@ -1007,23 +1043,119 @@ function goCue(t){ cueTag.textContent=t; cueTag.classList.add('show','go'); clea
 
 const unitVel = ()=> mode==='side' ? '度/秒' : '%/秒';
 
+/* ===== 案②：1回ごとの時間を波形の山谷から出す =====
+   しきい値で区切ると、動作の真ん中しか拾えないため時間が短く出る（基準の4〜5割）。
+   膝角度の波形そのものの谷（座りきった点）から山（立ちきった点）までを測れば、
+   しきい値に依存せず、長さが実際の動作時間と一致する。
+   回数の判定は従来どおりしきい値で行い、ここでは時間だけを計算し直す。 */
+const EX={
+  /* 中央移動平均を2回かける（位相がずれない） */
+  smooth(v,t){
+    const n=v.length; if(n<5) return v.slice();
+    const dt=(t[n-1]-t[0])/(n-1)/1000;            // 秒
+    let w=Math.max(2,Math.round(0.075/Math.max(dt,0.001)));  // 片側 約75ms
+    const pass=src=>{
+      const o=new Array(n);
+      for(let i=0;i<n;i++){
+        let s=0,c=0;
+        for(let k=Math.max(0,i-w);k<=Math.min(n-1,i+w);k++){ const x=src[k]; if(isFinite(x)){s+=x;c++;} }
+        o[i]=c?s/c:NaN;
+      }
+      return o;
+    };
+    return pass(pass(v));
+  },
+  pct(a,p){
+    const s=a.filter(isFinite).slice().sort((x,y)=>x-y);
+    if(!s.length) return NaN;
+    return s[Math.min(s.length-1,Math.max(0,Math.round((s.length-1)*p)))];
+  },
+  /* 突出度と最小間隔を満たす極値の添字 */
+  find(v,t,sign,prom,minGapMs){
+    const n=v.length, out=[];
+    for(let i=1;i<n-1;i++){
+      const c=sign*v[i];
+      if(!(c>=sign*v[i-1] && c>=sign*v[i+1])) continue;
+      if(c===sign*v[i-1] && c===sign*v[i+1]) continue;
+      let lo=c;                                   // 左右それぞれの最低点までの落差
+      for(let k=i-1;k>=0;k--){ if(sign*v[k]>c){break;} lo=Math.min(lo,sign*v[k]); }
+      let hi=c;
+      for(let k=i+1;k<n;k++){ if(sign*v[k]>c){break;} hi=Math.min(hi,sign*v[k]); }
+      if(c-Math.max(lo,hi) < prom) continue;
+      if(out.length && t[i]-t[out[out.length-1]] < minGapMs){
+        if(c > sign*v[out[out.length-1]]) out[out.length-1]=i;   // 近すぎるときは高いほうを残す
+        continue;
+      }
+      out.push(i);
+    }
+    return out;
+  },
+  /* REC.reps に upDur2 / downDur2 を書き込む。成功した回数を返す */
+  apply(){
+    REC.reps.forEach(r=>{ r.upDur2=NaN; r.downDur2=NaN; });
+    const F=REC.frames;
+    if(F.length<20 || !REC.reps.length) return 0;
+    const t=F.map(f=>f.t);
+    /* 信号は膝角度。両面とも、絶対値はずれていても上下の形は動作を反映する */
+    let raw=F.map(f=>f.kneeAngle);
+    if(raw.filter(isFinite).length < F.length*0.6) raw=F.map(f=>-f.comY);  // 膝が取れないときの保険
+    const v=this.smooth(raw,t);
+    const rng=this.pct(v,0.975)-this.pct(v,0.025);
+    if(!isFinite(rng) || rng<=0) return 0;
+    const prom=rng*0.35, gap=500;
+    const pk=this.find(v,t,+1,prom,gap);
+    const tr=this.find(v,t,-1,prom,gap);
+    if(!pk.length || !tr.length) return 0;
+    const tp=pk.map(i=>t[i]), tt=tr.map(i=>t[i]);
+    let ok=0;
+    REC.reps.forEach(r=>{
+      /* 立位に達した時刻にいちばん近い山を、その回の立ちきった点とみなす */
+      let best=-1, bd=Infinity;
+      tp.forEach((x,i)=>{ const d=Math.abs(x-r.upEnd); if(d<bd){bd=d;best=i;} });
+      if(best<0 || bd>700) return;
+      const peak=tp[best];
+      const prev=tt.filter(x=>x<peak).pop();
+      const next=tt.find(x=>x>peak);
+      if(prev!==undefined){ r.upDur2=(peak-prev)/1000; ok++; }
+      if(next!==undefined) r.downDur2=(next-peak)/1000;
+    });
+    return ok;
+  },
+  init(){
+    const e=$('useExtrema'); if(!e) return;
+    e.addEventListener('change',()=>{
+      if(!REC.reps.length) return;
+      renderRepTable();
+      const num=a=>a.filter(v=>typeof v==='number'&&!isNaN(v));
+      const up=num(REC.reps.map(r=>EX.up(r))), dn=num(REC.reps.map(r=>EX.down(r)));
+      resultSub.innerHTML='起立 '+fx(mean(up))+' ± '+fx(sd(up))+' 秒<br>着座 '+fx(mean(dn))+' ± '+fx(sd(dn))+' 秒';
+    });
+  },
+  on(){ const e=$('useExtrema'); return !!(e && e.checked); },
+  /* 表示に使う値。案②が有効で値があればそちらを返す */
+  up(r){ return (this.on() && isFinite(r.upDur2)) ? r.upDur2 : r.upDur; },
+  down(r){ return (this.on() && isFinite(r.downDur2)) ? r.downDur2 : r.downDur; }
+};
+
 function renderRepTable(){
   if(!REC.reps.length){ repTableWrap.innerHTML='<div class="empty-note">計測するとここに表示されます</div>'; return; }
   const num=a=>a.filter(v=>typeof v==='number'&&!isNaN(v));
-  const up=num(REC.reps.map(r=>r.upDur)), down=num(REC.reps.map(r=>r.downDur));
+  const up=num(REC.reps.map(r=>EX.up(r))), down=num(REC.reps.map(r=>EX.down(r)));
   const cyc=num(REC.reps.map(r=>r.cycle));
   const uv=num(REC.reps.map(r=>r.upVel)), dv=num(REC.reps.map(r=>r.downVel));
   let h='<table class="reps"><thead><tr><th>回</th><th>起立(秒)</th><th>着座(秒)</th><th>1周期(秒)</th><th>起立速度</th><th>着座速度</th></tr></thead><tbody>';
   REC.reps.forEach(r=>{
-    h+='<tr><td>'+r.n+'</td><td>'+fx(r.upDur)+'</td><td>'+fx(r.downDur)+'</td><td>'+fx(r.cycle)
+    h+='<tr><td>'+r.n+'</td><td>'+fx(EX.up(r))+'</td><td>'+fx(EX.down(r))+'</td><td>'+fx(r.cycle)
       +'</td><td>'+fx(r.upVel,1)+'</td><td>'+fx(r.downVel,1)+'</td></tr>';
   });
   h+='<tr class="summary"><td>平均±SD</td><td>'+fx(mean(up))+'±'+fx(sd(up))+'</td><td>'+fx(mean(down))+'±'+fx(sd(down))
     +'</td><td>'+fx(mean(cyc))+'±'+fx(sd(cyc))+'</td><td>'+fx(mean(uv),1)+'±'+fx(sd(uv),1)
     +'</td><td>'+fx(mean(dv),1)+'±'+fx(sd(dv),1)+'</td></tr>';
-  h+='</tbody></table><div class="chart-cap">速度の単位は'+unitVel()
-    +'。起立時間は座位しきい値を離れてから立位しきい値に到達するまで、着座時間はその逆の区間です'
-    +'（しきい値の設定によって値が変わります）。最後の回は座り終えるまで着座欄が空欄になります。</div>';
+  h+='</tbody></table><div class="chart-cap">速度の単位は'+unitVel()+'。'
+    +(EX.on()
+      ? '起立時間は膝屈曲角の波形の山（座りきった点）から谷（立ちきった点）まで、着座時間はその逆の区間です。しきい値には依存しません。'
+      : '起立時間は座位しきい値を離れてから立位しきい値に到達するまで、着座時間はその逆の区間です（しきい値の設定によって値が変わります）。')
+    +'最後の回は座り終えるまで着座欄が空欄になります。</div>';
   repTableWrap.innerHTML=h;
 }
 
@@ -1195,8 +1327,9 @@ function finish(){
   Rec.finishing=true;           /* 締めのアナウンスが終わるまで録画を続ける */
   const el=performance.now()-startTs;
 
+  EX.apply();   /* 案②：波形の山谷から1回ごとの時間を出し直す */
   const num=a=>a.filter(v=>typeof v==='number'&&!isNaN(v));
-  const up=num(REC.reps.map(r=>r.upDur)), dn=num(REC.reps.map(r=>r.downDur));
+  const up=num(REC.reps.map(r=>EX.up(r))), dn=num(REC.reps.map(r=>EX.down(r)));
 
   if(testType==='cs30'){
     timeValue.textContent='0.0秒';
@@ -1390,7 +1523,259 @@ function cancelRecordOnly(){
    2) ためた値に時刻の原点を決めて、リアルタイムと同じ判定を一気に流す
    こうしておくと、しきい値を変えたときに読み取りをやり直さずに計算し直せる。 */
 const ANA={file:null, url:null, raw:[], capturing:false, replaying:false,
-           busy:false, cancel:false, hitTarget:false, lastDur:0};
+           busy:false, cancel:false, hitTarget:false, lastDur:0, t0:NaN};
+
+/* ===== 光刺激の検出 =====
+   3次元動作解析の開始に合わせて点灯させたランプを、動画の明るさから拾う。
+   骨格推定とは別に、動画の全フレームを1回流して明るさだけを記録する。
+   明るさの計算は小さなキャンバスで行うので、骨格推定よりはるかに速い。 */
+const LIGHT={
+  roi:null,            /* {x,y,w,h} 映像に対する割合。nullなら全画面 */
+  fpsFixed:false,      /* フレームレートがよくある値に一致したか */
+  samples:[],          /* {f:フレーム番号, t:動画時刻(秒), v:輝度} */
+  onsets:[],           /* 点灯の立ち上がり [{f,t}] */
+  fps:null, dropped:false, picking:false,
+  cv:null, cx:null,
+
+  prep(){
+    if(!this.cv){ this.cv=document.createElement('canvas'); this.cv.width=48; this.cv.height=36;
+                  this.cx=this.cv.getContext('2d',{willReadFrequently:true}); }
+  },
+  /* いまのフレームの、指定範囲の平均の明るさ */
+  value(){
+    this.prep();
+    const vw=video.videoWidth||1, vh=video.videoHeight||1;
+    const r=this.roi||{x:0,y:0,w:1,h:1};
+    const sx=Math.max(0,Math.round(r.x*vw)), sy=Math.max(0,Math.round(r.y*vh));
+    const sw=Math.max(1,Math.round(r.w*vw)), sh=Math.max(1,Math.round(r.h*vh));
+    try{ this.cx.drawImage(video,sx,sy,sw,sh,0,0,this.cv.width,this.cv.height); }catch(e){ return NaN; }
+    let d;
+    try{ d=this.cx.getImageData(0,0,this.cv.width,this.cv.height).data; }catch(e){ return NaN; }
+    let s=0;
+    for(let i=0;i<d.length;i+=4) s+=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+    return s/(d.length/4);
+  },
+
+  /* 動画を1回再生して、1フレームずつ明るさを記録する */
+  async scan(onProgress){
+    this.samples=[]; this.onsets=[]; this.dropped=false; this.fps=null; this.fpsFixed=false;
+    const dur=video.duration;
+    const hasRVFC = typeof video.requestVideoFrameCallback==='function';
+    if(hasRVFC){
+      await new Promise(res=>{
+        const out=this.samples; let last=null, lastPresented=null, done=false;
+        const fin=()=>{ if(done) return; done=true; video.pause(); video.playbackRate=1; res(); };
+        const step=(now,meta)=>{
+          const v=this.value();
+          if(isFinite(v)) out.push({f:out.length, t:meta.mediaTime, v:v, pf:meta.presentedFrames});
+          if(lastPresented!==null && meta.presentedFrames-lastPresented>1) this.dropped=true;
+          lastPresented=meta.presentedFrames;
+          if(onProgress && out.length%12===0) onProgress(Math.min(1,meta.mediaTime/dur));
+          if(video.ended || meta.mediaTime>=dur-0.001){ fin(); return; }
+          video.requestVideoFrameCallback(step);
+        };
+        video.currentTime=0; video.muted=true; video.playbackRate=1;   /* コマ落ちを避けるため等倍で流す */
+        video.play().then(()=>video.requestVideoFrameCallback(step)).catch(fin);
+        video.addEventListener('ended',fin,{once:true});
+        setTimeout(fin, Math.max(20000, dur*1000+15000));
+      });
+      /* 実フレーム番号に振り直す */
+      if(this.samples.length>2){
+        const d=[]; for(let i=1;i<this.samples.length;i++) d.push(this.samples[i].t-this.samples[i-1].t);
+        d.sort((a,b)=>a-b);
+        const med=d[Math.floor(d.length/2)];
+        if(med>0){
+          let fps=1/med;
+          /* コマ落ちがあると推定値がずれるので、よくあるフレームレートに寄せる */
+          const STD=[23.976,24,25,29.97,30,48,50,59.94,60,100,120,240];
+          let best=null, bd=Infinity;
+          STD.forEach(x=>{ const r=Math.abs(x-fps)/x; if(r<bd){bd=r;best=x;} });
+          if(best!==null && bd<0.04){ fps=best; this.fpsFixed=true; }
+          this.fps=fps;
+          this.samples.forEach(s=>{ s.f=Math.round(s.t*fps); });
+        }
+      }
+    }
+    if(this.samples.length<10){
+      /* requestVideoFrameCallback が使えない場合は、細かく送って調べる */
+      const fps=30; this.fps=fps; this.fpsFixed=false; const step=1/fps; let i=0;
+      for(let t=0;t<dur-1e-3;t+=step){
+        await seekTo(t);
+        const v=this.value();
+        if(isFinite(v)) this.samples.push({f:Math.round(t*fps), t:t, v:v});
+        if(onProgress && (++i)%10===0) onProgress(t/dur);
+      }
+    }
+    this.detect();
+    return this.samples.length;
+  },
+
+  /* しきい値を超えた立ち上がりを拾う */
+  detect(){
+    this.onsets=[];
+    const S=this.samples;
+    if(S.length<10) return;
+    const vs=S.map(s=>s.v).slice().sort((a,b)=>a-b);
+    const base=vs[Math.floor(vs.length*0.20)];      /* 消灯時の明るさ */
+    const top =vs[Math.floor(vs.length*0.995)];     /* 点灯時の明るさ */
+    const k=(+$('lightTh').value)/100;
+    const th=base+(top-base)*k;
+    this.th=th; this.base=base; this.top=top;
+    if(top-base < 3) return;                        /* 明暗の差が小さすぎる */
+    let armed=true, lastT=-9;
+    for(const s of S){
+      if(armed && s.v>=th && s.t-lastT>0.2){ this.onsets.push({f:s.f,t:s.t}); lastT=s.t; armed=false; }
+      if(!armed && s.v < base+(top-base)*k*0.8) armed=true;
+    }
+  },
+
+  first(){ return this.onsets.length? this.onsets[0] : null; },
+
+  /* 動画時刻における輝度（CSV用） */
+  at(t){
+    const S=this.samples; if(!S.length) return NaN;
+    let lo=0, hi=S.length-1;
+    while(lo<hi-1){ const m=(lo+hi)>>1; if(S[m].t<=t) lo=m; else hi=m; }
+    return S[lo].v;
+  },
+  isOn(t){ return isFinite(this.th) && this.at(t)>=this.th ? 1 : 0; },
+
+  /* 明るさのグラフ */
+  draw(){
+    const cv=$('lightChart'); if(!cv) return;
+    const S=this.samples;
+    cv.style.display = S.length? 'block':'none';
+    $('lightThRow').style.display = S.length? 'flex':'none';
+    if(!S.length) return;
+    const dpr=window.devicePixelRatio||1;
+    const w=cv.clientWidth||600, h=120;
+    cv.width=w*dpr; cv.height=h*dpr;
+    const c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0);
+    c.clearRect(0,0,w,h); c.fillStyle='#fff'; c.fillRect(0,0,w,h);
+    const t0=S[0].t, t1=S[S.length-1].t;
+    const lo=Math.min(...S.map(s=>s.v)), hi=Math.max(...S.map(s=>s.v));
+    const X=t=>8+(t-t0)/Math.max(1e-6,t1-t0)*(w-16);
+    const Y=v=>h-10-(v-lo)/Math.max(1e-6,hi-lo)*(h-20);
+    c.strokeStyle='#2C6E63'; c.lineWidth=1.3; c.beginPath();
+    S.forEach((s,i)=>{ const x=X(s.t), y=Y(s.v); i?c.lineTo(x,y):c.moveTo(x,y); });
+    c.stroke();
+    if(isFinite(this.th)){
+      c.strokeStyle='#B5502E'; c.setLineDash([5,4]); c.lineWidth=1.2;
+      c.beginPath(); c.moveTo(8,Y(this.th)); c.lineTo(w-8,Y(this.th)); c.stroke(); c.setLineDash([]);
+    }
+    this.onsets.forEach(o=>{
+      c.strokeStyle='#B5502E'; c.lineWidth=1.6;
+      c.beginPath(); c.moveTo(X(o.t),6); c.lineTo(X(o.t),h-6); c.stroke();
+    });
+    c.fillStyle='#7a8b86'; c.font='10px sans-serif';
+    c.fillText('明るさ',10,14);
+    c.fillText(t1.toFixed(1)+'秒',w-36,h-2);
+  },
+
+  report(){
+    const f=this.first();
+    if(!this.samples.length){ $('lightHint').textContent=''; return; }
+    if(!f){
+      $('lightHint').textContent='点灯を検出できませんでした。範囲としきい値を見直してください（明暗の差 '+((this.top-this.base)||0).toFixed(1)+'）。';
+      return;
+    }
+    $('lightHint').textContent='点灯を'+this.onsets.length+'件検出。最初の点灯：フレーム '+f.f+'　動画時刻 '+f.t.toFixed(3)+'秒'
+      +(this.fps?('　（'+this.fps.toFixed(1)+'コマ/秒）'):'')
+      +((this.dropped&&!this.fpsFixed)?'\n※再生中にコマ落ちがありました。フレーム番号は目安です。動画時刻は正しい値です。':'');
+  }
+};
+
+/* --- 範囲の指定（映像の上をなぞる） --- */
+(function roiPicker(){
+  const cv=$('roiCv'); if(!cv) return;
+  let drag=null;
+  const stageRect=()=>stage.getBoundingClientRect();
+  /* 表示は object-fit:cover なので、はみ出した分を考慮して映像内の割合に直す */
+  const toVideo=(px,py)=>{
+    const R=stageRect(), vw=video.videoWidth||1, vh=video.videoHeight||1;
+    const sc=Math.max(R.width/vw, R.height/vh);
+    const dw=vw*sc, dh=vh*sc;
+    const ox=(dw-R.width)/2, oy=(dh-R.height)/2;
+    return { x:Math.min(1,Math.max(0,(px+ox)/dw)), y:Math.min(1,Math.max(0,(py+oy)/dh)) };
+  };
+  const redraw=(a,b)=>{
+    const R=stageRect(); const dpr=window.devicePixelRatio||1;
+    cv.width=R.width*dpr; cv.height=R.height*dpr;
+    const c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0);
+    c.clearRect(0,0,R.width,R.height);
+    c.fillStyle='rgba(0,0,0,.35)'; c.fillRect(0,0,R.width,R.height);
+    if(a&&b){
+      const x=Math.min(a.x,b.x), y=Math.min(a.y,b.y), w=Math.abs(a.x-b.x), h=Math.abs(a.y-b.y);
+      c.clearRect(x,y,w,h);
+      c.strokeStyle='#B5502E'; c.lineWidth=2; c.strokeRect(x,y,w,h);
+    }
+    c.fillStyle='#fff'; c.font='bold 13px sans-serif';
+    c.fillText('光が映る範囲をなぞってください', 12, 22);
+  };
+  const start=e=>{
+    if(!LIGHT.picking) return;
+    e.preventDefault();
+    const R=stageRect();
+    drag={a:{x:e.clientX-R.left,y:e.clientY-R.top},b:null};
+    cv.setPointerCapture(e.pointerId);
+  };
+  const move=e=>{
+    if(!drag) return;
+    const R=stageRect();
+    drag.b={x:e.clientX-R.left,y:e.clientY-R.top};
+    redraw(drag.a,drag.b);
+  };
+  const end=e=>{
+    if(!drag||!drag.b){ drag=null; return; }
+    const p=toVideo(Math.min(drag.a.x,drag.b.x), Math.min(drag.a.y,drag.b.y));
+    const q=toVideo(Math.max(drag.a.x,drag.b.x), Math.max(drag.a.y,drag.b.y));
+    const w=q.x-p.x, h=q.y-p.y;
+    drag=null;
+    if(w<0.01||h<0.01){ return; }
+    LIGHT.roi={x:p.x,y:p.y,w:w,h:h};
+    LIGHT.picking=false; cv.style.display='none';
+    $('roiHint').textContent='範囲を指定しました（横 '+(p.x*100).toFixed(0)+'〜'+(q.x*100).toFixed(0)
+      +'%、縦 '+(p.y*100).toFixed(0)+'〜'+(q.y*100).toFixed(0)+'%）。解析を開始してください。';
+    $('roiBtn').textContent='範囲を指定し直す';
+  };
+  cv.addEventListener('pointerdown',start);
+  cv.addEventListener('pointermove',move);
+  cv.addEventListener('pointerup',end);
+  cv.addEventListener('pointercancel',()=>{drag=null;});
+
+  $('roiBtn').addEventListener('click',async()=>{
+    if(!ANA.file){ banner('info','先に動画ファイルを選んでください。'); return; }
+    try{
+      if(!ANA.url){ await anaLoadVideo(); await seekTo(Math.min(0.5, (video.duration||1)/4)); }
+      LIGHT.picking=true; cv.style.display='block'; redraw(null,null);
+      switchPane('measure');
+      $('roiHint').textContent='映像の上で、光が映る範囲をなぞってください。';
+    }catch(e){ banner('warn','動画を読み込めませんでした：'+String(e&&e.message||e)); }
+  });
+  $('roiClear').addEventListener('click',()=>{
+    LIGHT.roi=null; LIGHT.picking=false; cv.style.display='none';
+    $('roiBtn').textContent='光が映る範囲を指定';
+    $('roiHint').textContent='画面全体の明るさで判定します。';
+  });
+})();
+
+$('lightOn').addEventListener('change',()=>{
+  $('lightBox').style.display = $('lightOn').checked ? 'block':'none';
+});
+$('lightTh').addEventListener('input',()=>{
+  $('lightThVal').textContent=$('lightTh').value;
+  LIGHT.detect(); LIGHT.draw(); LIGHT.report();
+});
+
+/* CSVの「動画フレーム／動画時刻／輝度／光刺激」4列。解析モード以外では空欄 */
+function lightCols(tRel){
+  if(runMode!=='ana' || !isFinite(ANA.t0)) return ',,,';
+  const abs=(ANA.t0 + tRel)/1000;
+  const fr = LIGHT.fps ? Math.round(abs*LIGHT.fps) : '';
+  if(!LIGHT.samples.length) return [fr, abs.toFixed(3), '', ''].join(',');
+  const v=LIGHT.at(abs);
+  return [fr, abs.toFixed(3), isFinite(v)?v.toFixed(1):'', LIGHT.isOn(abs)].join(',');
+}
 
 function anaHint(t){ const h=$('anaHint'); h.style.whiteSpace='pre-line'; h.textContent=t; }
 function anaProgress(p){
@@ -1406,6 +1791,8 @@ $('anaFile').addEventListener('change',e=>{
   const f=e.target.files && e.target.files[0];
   ANA.file=f||null;
   $('anaRedoRow').style.display='none';
+  ANA.t0=NaN;
+  LIGHT.samples=[]; LIGHT.onsets=[]; LIGHT.draw(); $('lightHint').textContent='';
   if(!f){ anaHint('動画ファイルを選んでください。'); return; }
   anaHint(f.name+'\n'+(f.size/1048576).toFixed(1)+'MB　「解析を開始」を押してください。');
 });
@@ -1463,6 +1850,19 @@ async function analyzeRun(){
     if(!S.poseReady && !S.poseErr) await initPose();
     if(S.poseErr) throw new Error('骨格検出を使えません（'+S.poseErr+'）');
     const dur=await anaLoadVideo();
+
+    /* 先に光刺激を拾う。動画を1回流すだけなので骨格推定より速い */
+    if($('lightOn').checked){
+      anaHint('光刺激を探しています…（動画を1回再生します）');
+      statusLine.textContent='光刺激を探しています';
+      await LIGHT.scan(p=>{ anaProgress(p*0.3); fpsTag.textContent=Math.round(p*100)+'%'; });
+      LIGHT.draw(); LIGHT.report();
+      await seekTo(0);
+      if(ANA.cancel){ anaHint('解析を中止しました。'); return; }
+    }else{
+      LIGHT.samples=[]; LIGHT.onsets=[]; LIGHT.draw(); $('lightHint').textContent='';
+    }
+
     const sr=Number($('anaSr').value)||20;
     const step=1/sr;
     const total=Math.max(1,Math.floor(dur/step));
@@ -1480,7 +1880,8 @@ async function analyzeRun(){
       try{ await S.pose.send({image:video}); }catch(e){}
       i++;
       if(i%3===0){
-        anaProgress(i/total);
+        const off=$('lightOn').checked?0.3:0;
+        anaProgress(off+(1-off)*i/total);
         fpsTag.textContent=Math.round(100*i/total)+'%';
       }
     }
@@ -1509,6 +1910,12 @@ async function analyzeRun(){
 /* 0秒とする位置を決める */
 function analyzeOrigin(){
   const v=$('anaOrigin').value;
+  if(v==='light'){
+    const f=LIGHT.first();
+    if(f) return f.t*1000;
+    banner('warn','光刺激を検出できなかったため、動画の先頭を0秒としました。');
+    return 0;
+  }
   if(v==='head') return 0;
   if(v==='manual') return Math.max(0,(parseFloat($('anaStart').value)||0)*1000);
   /* 最初の動き出し：座位がしばらく続いたあと、初めて座位から外れた時刻 */
@@ -1551,6 +1958,7 @@ function analyzeReplay(firstTime){
   $('fbPanel').style.display='none'; $('postPanel').style.display='none';
 
   const t0=analyzeOrigin();
+  ANA.t0=t0;
   ANA.replaying=true; ANA.hitTarget=false;
   Voice.mute=true; running=true;
   let last=0;
@@ -1568,8 +1976,9 @@ function analyzeReplay(firstTime){
   $('trailSec').value=keepTrail;
 
   /* 表示 */
+  EX.apply();   /* 案②：波形の山谷から1回ごとの時間を出し直す */
   const num=a=>a.filter(v=>typeof v==='number'&&!isNaN(v));
-  const up=num(REC.reps.map(r=>r.upDur)), dn=num(REC.reps.map(r=>r.downDur));
+  const up=num(REC.reps.map(r=>EX.up(r))), dn=num(REC.reps.map(r=>EX.down(r)));
   if(testType==='cs30'){
     timeValue.textContent='0.0秒';
     countValue.textContent=repCount+' 回';
@@ -2978,8 +3387,8 @@ $('fixFile').addEventListener('change', async e => {
 
 /* ===== 波形描画 ===== */
 const SIGNALS=[
-  {key:'kneeAngle',name:'膝関節角度',unit:'度',note:'側方モードの立位・座位判定に使用'},
-  {key:'hipAngle', name:'股関節角度',unit:'度',note:'側方モードの立位判定の補助に使用'},
+  {key:'kneeAngle',name:'膝関節屈曲角',unit:'度（伸展位=0）',flex:true,note:'側方モードの立位・座位判定に使用'},
+  {key:'hipAngle', name:'股関節屈曲角',unit:'度（伸展位=0）',flex:true,note:'側方モードの立位判定の補助に使用'},
   {key:'ratio',    name:'前方比率',  unit:'%', note:'前方モードの立位・座位判定に使用'},
   {key:'hipY',     name:'股関節 Y座標',unit:'正規化',note:'前方モードの比率算出に使用（0=画面上端, 1=下端）'},
   {key:'kneeY',    name:'膝 Y座標',  unit:'正規化',note:'参考データ'},
@@ -3016,18 +3425,20 @@ function drawChart(cv, sigKey){
   const pw=w-padL-padR, ph=h-padT-padB;
 
   const whole=optWhole.checked, norm=optNormalize.checked;
+  /* 角度は臨床の表記（伸展位=0度）に直して描く */
+  const V = f => sig && sig.flex ? flex(f[sigKey]) : f[sigKey];
   let series=[];
   if(whole){
-    if(REC.frames.length) series=[{label:'全体',color:'#2c6e63',pts:REC.frames.map(f=>({x:f.t/1000,y:f[sigKey]}))}];
+    if(REC.frames.length) series=[{label:'全体',color:'#2c6e63',pts:REC.frames.map(f=>({x:f.t/1000,y:V(f)}))}];
   }else{
     REC.reps.forEach((rep,i)=>{
       const fr=repFrames(rep);
       if(!fr.length) return;
       const dur=((rep.downEnd!==null&&rep.downEnd!==undefined)?rep.downEnd:rep.upEnd)-rep.upStart;
       series.push({label:(i+1)+'回目',color:repColor(i),
-        pts:fr.map(f=>({x: norm? ((f.t-rep.upStart)/Math.max(1,dur))*100 : (f.t-rep.upStart)/1000, y:f[sigKey]})),
+        pts:fr.map(f=>({x: norm? ((f.t-rep.upStart)/Math.max(1,dur))*100 : (f.t-rep.upStart)/1000, y:V(f)})),
         markX: norm? ((rep.upEnd-rep.upStart)/Math.max(1,dur))*100 : (rep.upEnd-rep.upStart)/1000,
-        markY: (valueAt(rep.upEnd)||{})[sigKey]});
+        markY: V(valueAt(rep.upEnd)||{})});
     });
   }
   if(!series.length){
@@ -3269,7 +3680,7 @@ function phaseOf(f){
 }
 function csvTimeSeries(){
   const nf=(v,d)=>(typeof v==='number'&&isFinite(v))?v.toFixed(d):'';
-  const head=['経過時間(秒)','回','局面','判定ゾーン','膝関節角度(度)','股関節角度(度)','前方比率(%)',
+  const head=['経過時間(秒)','回','局面','判定ゾーン','膝関節屈曲角(度)','股関節屈曲角(度)','前方比率(%)','動画フレーム','動画時刻(秒)','輝度','光刺激',
     '肩X','肩Y','股関節X','股関節Y','膝X','膝Y','足首X','足首Y','検出信頼度','使用側',
     '頭部偏位(%)','肩偏位(%)','骨盤偏位(%)','体幹傾き(度)','肩水平傾き(度)',
     '重心X','重心Y','重心相対X(肩幅比)','重心相対Y(肩幅比)','重心速度(肩幅比/秒)',
@@ -3278,7 +3689,8 @@ function csvTimeSeries(){
   REC.frames.forEach(f=>{
     const r=repOf(f.t);
     lines.push([ (f.t/1000).toFixed(3), r?r.n:'', phaseOf(f), f.zone,
-      f.kneeAngle.toFixed(2), f.hipAngle.toFixed(2), f.ratio.toFixed(2),
+      flex(f.kneeAngle).toFixed(2), flex(f.hipAngle).toFixed(2), f.ratio.toFixed(2),
+      lightCols(f.t),
       f.shX.toFixed(5), f.shY.toFixed(5), f.hipX.toFixed(5), f.hipY.toFixed(5),
       f.kneeX.toFixed(5), f.kneeY.toFixed(5), f.ankX.toFixed(5), f.ankY.toFixed(5),
       f.vis.toFixed(3), f.side==='L'?'左':'右',
@@ -3352,27 +3764,53 @@ function csvSummary(){
   if(typeof Rec!=='undefined' && Rec.lastFile) lines.push('録画ファイル,'+Rec.lastFile.replace(/,/g,' '));
   lines.push('計測モード,'+(mode==='side'?'側方':'前方'));
   lines.push('判定に使用した信号,'+(mode==='side'?'膝関節角度':'前方比率'));
-  lines.push('立位しきい値,'+(mode==='side'?th.standAngle.value+'度':th.standRatio.value+'%'));
-  lines.push('座位しきい値,'+(mode==='side'?th.sitAngle.value+'度':th.sitRatio.value+'%'));
-  lines.push('注記,起立時間は座位しきい値を離れてから立位しきい値に到達するまでの時間です');
+  lines.push('立位しきい値,'+(mode==='side'?'膝屈曲 '+th.standAngle.value+'度以下':th.standRatio.value+'%以上'));
+  lines.push('座位しきい値,'+(mode==='side'?'膝屈曲 '+th.sitAngle.value+'度以上':th.sitRatio.value+'%以下'));
+  lines.push('角度の表記,伸展位を0度とする屈曲角');
+  if(runMode==='ana' && LIGHT.samples.length){
+    lines.push('');
+    lines.push('【光刺激】');
+    lines.push('検出した点灯の数,'+LIGHT.onsets.length);
+    lines.push('動画のフレームレート(コマ/秒),'+(LIGHT.fps?LIGHT.fps.toFixed(2):'不明'));
+    const r=LIGHT.roi;
+    lines.push('判定した範囲,'+(r?('横 '+(r.x*100).toFixed(0)+'〜'+((r.x+r.w)*100).toFixed(0)+'% / 縦 '+(r.y*100).toFixed(0)+'〜'+((r.y+r.h)*100).toFixed(0)+'%'):'画面全体'));
+    lines.push('消灯時の明るさ,'+(isFinite(LIGHT.base)?LIGHT.base.toFixed(1):''));
+    lines.push('点灯時の明るさ,'+(isFinite(LIGHT.top)?LIGHT.top.toFixed(1):''));
+    lines.push('点灯と判定した明るさ,'+(isFinite(LIGHT.th)?LIGHT.th.toFixed(1):''));
+    if(LIGHT.dropped && !LIGHT.fpsFixed) lines.push('注記,再生中にコマ落ちがありました。フレーム番号は目安です。動画時刻は正しい値です');
+    lines.push('');
+    lines.push(['点灯番号','動画フレーム','動画時刻(秒)','計測時刻(秒)'].join(','));
+    LIGHT.onsets.forEach((o,i)=>{
+      const rel = isFinite(ANA.t0) ? (o.t - ANA.t0/1000).toFixed(3) : '';
+      lines.push([i+1, o.f, o.t.toFixed(3), rel].join(','));
+    });
+  }
+  lines.push('');
+  lines.push('注記,「しきい値」列は座位しきい値を離れてから立位しきい値に到達するまでの時間です');
+  lines.push('注記,「山谷」列は膝屈曲角の波形の山から谷までの時間です（しきい値に依存しません）');
+  lines.push('画面表示に使った定義,'+(EX.on()?'山谷':'しきい値'));
   if(REC.reps.some(r=>r.skelColor)){
     lines.push('骨格線の色,'+REC.reps.map(r=>(r.n)+'回目:'+(r.skelColor||'')).join(' / '));
   }
   lines.push('');
-  lines.push(['回','起立開始(秒)','起立終了(秒)','起立時間(秒)','着座開始(秒)','着座終了(秒)','着座時間(秒)',
+  lines.push(['回','起立開始(秒)','起立終了(秒)','起立時間_しきい値(秒)','着座開始(秒)','着座終了(秒)','着座時間_しきい値(秒)',
+    '起立時間_山谷(秒)','着座時間_山谷(秒)',
     '1周期(秒)','起立平均速度('+u+')','着座平均速度('+u+')','起立ピーク速度('+u+')','着座ピーク速度('+u+')'].join(','));
   REC.reps.forEach(r=>{
     lines.push([r.n,(r.upStart/1000).toFixed(3),(r.upEnd/1000).toFixed(3),r.upDur.toFixed(3),
       r.downStart!==null?(r.downStart/1000).toFixed(3):'', r.downEnd!==null?(r.downEnd/1000).toFixed(3):'',
-      isNaN(r.downDur)?'':r.downDur.toFixed(3), isNaN(r.cycle)?'':r.cycle.toFixed(3),
+      isNaN(r.downDur)?'':r.downDur.toFixed(3),
+      nz(r.upDur2), nz(r.downDur2),
+      isNaN(r.cycle)?'':r.cycle.toFixed(3),
       nz(r.upVel), nz(r.downVel), nz(r.upPeak), nz(r.downPeak)].join(','));
   });
   const up=num(REC.reps.map(r=>r.upDur)), dn=num(REC.reps.map(r=>r.downDur)), cy=num(REC.reps.map(r=>r.cycle));
+  const ue=num(REC.reps.map(r=>r.upDur2)), de=num(REC.reps.map(r=>r.downDur2));
   const uv=num(REC.reps.map(r=>r.upVel)), dv=num(REC.reps.map(r=>r.downVel));
   const up2=num(REC.reps.map(r=>r.upPeak)), dn2=num(REC.reps.map(r=>r.downPeak));
-  lines.push(['平均','','',nz(mean(up)),'','',nz(mean(dn)),nz(mean(cy)),
+  lines.push(['平均','','',nz(mean(up)),'','',nz(mean(dn)),nz(mean(ue)),nz(mean(de)),nz(mean(cy)),
     nz(mean(uv)),nz(mean(dv)),nz(mean(up2)),nz(mean(dn2))].join(','));
-  lines.push(['標準偏差','','',nz(sd(up)),'','',nz(sd(dn)),nz(sd(cy)),
+  lines.push(['標準偏差','','',nz(sd(up)),'','',nz(sd(dn)),nz(sd(ue)),nz(sd(de)),nz(sd(cy)),
     nz(sd(uv)),nz(sd(dv)),nz(sd(up2)),nz(sd(dn2))].join(','));
   return lines.join('\n');
 }
@@ -3479,6 +3917,7 @@ if(!window.showDirectoryPicker){
 }
 Rec.updateHint();
 renderRepTable();
+EX.init();
 applyRunMode();
 initPose();
 
