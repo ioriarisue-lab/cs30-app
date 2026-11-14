@@ -273,6 +273,31 @@
     <h3>動画を解析</h3>
     <div class="row"><label for="anaFile" style="flex:0 0 auto;">動画ファイル</label>
       <input type="file" id="anaFile" accept="video/*" style="flex:1;font-size:12px;min-width:0;" /></div>
+    <div id="rangeBox" style="display:none;border-top:1px solid var(--line);padding-top:8px;margin-top:4px;">
+      <div class="row" style="margin-bottom:2px;"><label style="font-weight:700;">解析区間</label>
+        <span class="val" id="rangeNow" style="min-width:auto;white-space:nowrap;flex:0 0 auto;">0.00秒</span></div>
+      <input type="range" id="rangeScrub" min="0" max="1" step="0.01" value="0" style="width:100%;margin:4px 0 2px;" />
+      <div style="position:relative;height:10px;margin:0 8px 8px;border-radius:5px;background:var(--line);">
+        <div id="rangeBand" style="position:absolute;top:0;height:10px;border-radius:5px;background:var(--accent);left:0;width:100%;"></div>
+      </div>
+      <div class="row">
+        <button class="mini-btn" id="rangeBack" style="flex:0 0 auto;">◀ 1コマ</button>
+        <button class="mini-btn" id="rangeFwd" style="flex:0 0 auto;">1コマ ▶</button>
+        <button class="mini-btn" id="rangeAll" style="flex:1;">全体に戻す</button>
+      </div>
+      <div class="row">
+        <button class="mini-btn" id="rangeSetFrom" style="flex:1;">ここを開始に</button>
+        <button class="mini-btn" id="rangeSetTo" style="flex:1;">ここを終了に</button>
+      </div>
+      <div class="row">
+        <label for="anaFrom" style="flex:0 0 auto;">開始</label>
+        <input type="number" id="anaFrom" class="txt-in" value="0" min="0" step="0.1" style="max-width:28%;" />
+        <label for="anaTo" style="flex:0 0 auto;">終了</label>
+        <input type="number" id="anaTo" class="txt-in" value="0" min="0" step="0.1" style="max-width:28%;" />
+        <span style="font-size:11px;color:#7a8b86;">秒</span>
+      </div>
+      <div class="row"><label id="rangeHint" style="font-size:11px;color:#7a8b86;line-height:1.7;">バーを動かして映像を確かめ、開始と終了を決めてください。区間の外は骨格を読み取りません。</label></div>
+    </div>
     <div class="row"><label for="anaSr">読み取る間隔</label>
       <select id="anaSr">
         <option value="30">30コマ/秒（細かい・時間がかかる）</option>
@@ -284,11 +309,11 @@
       <select id="anaOrigin">
         <option value="auto">最初の動き出し</option>
         <option value="light">光刺激の点灯</option>
-        <option value="head">動画の先頭</option>
+        <option value="head">解析区間の先頭</option>
         <option value="manual">時刻を指定する</option>
       </select></div>
     <div class="row" id="anaStartRow" style="display:none;">
-      <label for="anaStart">開始時刻（秒）</label>
+      <label for="anaStart">0秒とする動画時刻（秒）</label>
       <input type="number" id="anaStart" class="txt-in" value="0" min="0" step="0.1" style="max-width:40%;" /></div>
 
     <div class="row" style="border-top:1px solid var(--line);padding-top:10px;margin-top:4px;">
@@ -465,6 +490,14 @@
     <div class="row">
       <label for="csvAuto">計測終了時にCSVも保存する</label>
       <label class="switch"><input type="checkbox" id="csvAuto" checked /><span class="slider"></span></label>
+    </div>
+    <div class="row">
+      <label for="coordOrigin">CSVの座標の原点</label>
+      <select id="coordOrigin">
+        <option value="br" selected>画面の右下</option>
+        <option value="bl">画面の左下</option>
+        <option value="tl">画面の左上（MediaPipeのまま）</option>
+      </select>
     </div>
     <div class="row">
       <label for="csvKind">保存するCSV</label>
@@ -1522,7 +1555,7 @@ function cancelRecordOnly(){
    1) 動画を1コマずつ送って骨格を検出し、計測値だけをためる（ANA.raw）
    2) ためた値に時刻の原点を決めて、リアルタイムと同じ判定を一気に流す
    こうしておくと、しきい値を変えたときに読み取りをやり直さずに計算し直せる。 */
-const ANA={file:null, url:null, raw:[], capturing:false, replaying:false,
+const ANA={from:0, to:0, file:null, url:null, raw:[], capturing:false, replaying:false,
            busy:false, cancel:false, hitTarget:false, lastDur:0, t0:NaN};
 
 /* ===== 光刺激の検出 =====
@@ -1793,9 +1826,71 @@ $('anaFile').addEventListener('change',e=>{
   $('anaRedoRow').style.display='none';
   ANA.t0=NaN;
   LIGHT.samples=[]; LIGHT.onsets=[]; LIGHT.draw(); $('lightHint').textContent='';
+  $('rangeBox').style.display='none'; RANGE.dur=0;
   if(!f){ anaHint('動画ファイルを選んでください。'); return; }
-  anaHint(f.name+'\n'+(f.size/1048576).toFixed(1)+'MB　「解析を開始」を押してください。');
+  anaHint(f.name+'\n'+(f.size/1048576).toFixed(1)+'MB　読み込んでいます…');
+  anaLoadVideo().then(dur=>{
+    RANGE.init(dur);
+    anaHint(f.name+'\n'+(f.size/1048576).toFixed(1)+'MB・'+dur.toFixed(1)+'秒\n解析区間を決めて「解析を開始」を押してください。');
+  }).catch(e=>{
+    anaHint('動画を読み込めませんでした：'+String(e&&e.message||e));
+  });
 });
+
+/* --- 解析区間 --- */
+const RANGE={
+  dur:0, fps:30,
+  init(dur){
+    this.dur=dur;
+    const sc=$('rangeScrub'); sc.max=dur.toFixed(3); sc.step='0.001'; sc.value='0';
+    $('anaFrom').max=dur.toFixed(2); $('anaTo').max=dur.toFixed(2);
+    $('anaFrom').value='0.00'; $('anaTo').value=dur.toFixed(2);
+    $('rangeBox').style.display='block';
+    this.show(0); this.band();
+  },
+  get(){
+    let a=parseFloat($('anaFrom').value), b=parseFloat($('anaTo').value);
+    if(!isFinite(a)) a=0; if(!isFinite(b)) b=this.dur;
+    a=Math.max(0,Math.min(this.dur,a)); b=Math.max(0,Math.min(this.dur,b));
+    if(b<a){ const t=a; a=b; b=t; }
+    return {from:a,to:b};
+  },
+  band(){
+    if(!this.dur) return;
+    const r=this.get(), el=$('rangeBand');
+    el.style.left=(100*r.from/this.dur)+'%';
+    el.style.width=(100*(r.to-r.from)/this.dur)+'%';
+    $('rangeHint').textContent='解析区間 '+r.from.toFixed(2)+'〜'+r.to.toFixed(2)+'秒（'+(r.to-r.from).toFixed(2)+'秒）。区間の外は骨格を読み取りません。';
+  },
+  show(t){
+    t=Math.max(0,Math.min(this.dur,t));
+    $('rangeScrub').value=t;
+    $('rangeNow').textContent=t.toFixed(2)+'秒';
+    try{ video.currentTime=t; }catch(e){}
+  },
+  now(){ return parseFloat($('rangeScrub').value)||0; }
+};
+$('rangeScrub').addEventListener('input',()=>RANGE.show(RANGE.now()));
+$('rangeBack').addEventListener('click',()=>RANGE.show(RANGE.now()-1/(LIGHT.fps||RANGE.fps)));
+$('rangeFwd').addEventListener('click',()=>RANGE.show(RANGE.now()+1/(LIGHT.fps||RANGE.fps)));
+$('rangeSetFrom').addEventListener('click',()=>{
+  const t=RANGE.now();
+  $('anaFrom').value=t.toFixed(2);
+  if(parseFloat($('anaTo').value)<t) $('anaTo').value=RANGE.dur.toFixed(2);
+  RANGE.band();
+});
+$('rangeSetTo').addEventListener('click',()=>{
+  const t=RANGE.now();
+  $('anaTo').value=t.toFixed(2);
+  if(parseFloat($('anaFrom').value)>t) $('anaFrom').value='0.00';
+  RANGE.band();
+});
+$('rangeAll').addEventListener('click',()=>{
+  $('anaFrom').value='0.00'; $('anaTo').value=RANGE.dur.toFixed(2); RANGE.band();
+});
+['anaFrom','anaTo'].forEach(id=>$(id).addEventListener('change',()=>{
+  RANGE.band(); RANGE.show(parseFloat($(id).value)||0);
+}));
 
 function seekTo(t){
   return new Promise(res=>{
@@ -1850,6 +1945,10 @@ async function analyzeRun(){
     if(!S.poseReady && !S.poseErr) await initPose();
     if(S.poseErr) throw new Error('骨格検出を使えません（'+S.poseErr+'）');
     const dur=await anaLoadVideo();
+    if(!RANGE.dur) RANGE.init(dur);
+    const rg=RANGE.get();
+    if(rg.to-rg.from<1) throw new Error('解析区間が短すぎます（1秒以上にしてください）');
+    ANA.from=rg.from; ANA.to=rg.to;
 
     /* 先に光刺激を拾う。動画を1回流すだけなので骨格推定より速い */
     if($('lightOn').checked){
@@ -1865,14 +1964,14 @@ async function analyzeRun(){
 
     const sr=Number($('anaSr').value)||20;
     const step=1/sr;
-    const total=Math.max(1,Math.floor(dur/step));
-    anaHint('骨格を読み取っています…（'+dur.toFixed(1)+'秒・'+sr+'コマ/秒）');
+    const total=Math.max(1,Math.floor((rg.to-rg.from)/step));
+    anaHint('骨格を読み取っています…（'+rg.from.toFixed(1)+'〜'+rg.to.toFixed(1)+'秒・'+sr+'コマ/秒）');
     statusLine.textContent='動画を解析しています';
     phaseTag.textContent='解析中';
     ANA.capturing=true;
     SkelColor.unlock();
     let i=0;
-    for(let t=0; t<dur-1e-3; t+=step){
+    for(let t=rg.from; t<rg.to-1e-3; t+=step){
       if(ANA.cancel) break;
       await seekTo(t);
       if(renderMode.value==='canvas') ctx.drawImage(video,0,0,canvas.width,canvas.height);
@@ -1916,7 +2015,7 @@ function analyzeOrigin(){
     banner('warn','光刺激を検出できなかったため、動画の先頭を0秒としました。');
     return 0;
   }
-  if(v==='head') return 0;
+  if(v==='head') return (ANA.from||0)*1000;
   if(v==='manual') return Math.max(0,(parseFloat($('anaStart').value)||0)*1000);
   /* 最初の動き出し：座位がしばらく続いたあと、初めて座位から外れた時刻 */
   let sitRun=0;
@@ -2000,7 +2099,8 @@ function analyzeReplay(firstTime){
   phaseTag.textContent='解析完了';
 
   const t0s=(t0/1000).toFixed(2);
-  anaHint('解析しました。\n読み取ったコマ数 '+ANA.raw.length+'　0秒の位置 '+t0s+'秒'
+  anaHint('解析しました。\n解析区間 '+ANA.from.toFixed(2)+'〜'+ANA.to.toFixed(2)+'秒　読み取ったコマ数 '+ANA.raw.length
+    +'\n0秒の位置（動画時刻） '+t0s+'秒'
     +'\n回数 '+repCount+'回'
     +'\nうまく数えられていないときは、撮影方向としきい値を見直して計算し直してください。');
   $('anaRedoRow').style.display='flex';
@@ -3678,8 +3778,21 @@ function phaseOf(f){
   if(r){ if(f.t<=r.upEnd) return '起立中'; if(f.t>=r.downStart) return '着座中'; return '立位保持'; }
   return f.zone==='sit'?'座位':(f.zone==='stand'?'立位':'中間');
 }
+/* CSVに書き出す座標の原点を変える。MediaPipeは画面の左上が原点（x右向き・y下向き、0〜1） */
+const COORD={
+  o(){ return ($('coordOrigin')&&$('coordOrigin').value)||'br'; },
+  x(v){ return (typeof v==='number'&&isFinite(v)&&this.o()==='br') ? 1-v : v; },
+  y(v){ return (typeof v==='number'&&isFinite(v)&&this.o()!=='tl') ? 1-v : v; },
+  label(){
+    const o=this.o();
+    if(o==='br') return '画面の右下（X：右端=0で左へ増える／Y：下端=0で上へ増える。画面の幅・高さを1とする）';
+    if(o==='bl') return '画面の左下（X：左端=0で右へ増える／Y：下端=0で上へ増える。画面の幅・高さを1とする）';
+    return '画面の左上（MediaPipeの出力のまま。X：左端=0で右へ増える／Y：上端=0で下へ増える）';
+  }
+};
 function csvTimeSeries(){
   const nf=(v,d)=>(typeof v==='number'&&isFinite(v))?v.toFixed(d):'';
+  const X=v=>nf(COORD.x(v),5), Y=v=>nf(COORD.y(v),5);
   const head=['経過時間(秒)','回','局面','判定ゾーン','膝関節屈曲角(度)','股関節屈曲角(度)','前方比率(%)','動画フレーム','動画時刻(秒)','輝度','光刺激',
     '肩X','肩Y','股関節X','股関節Y','膝X','膝Y','足首X','足首Y','検出信頼度','使用側',
     '頭部偏位(%)','肩偏位(%)','骨盤偏位(%)','体幹傾き(度)','肩水平傾き(度)',
@@ -3691,12 +3804,12 @@ function csvTimeSeries(){
     lines.push([ (f.t/1000).toFixed(3), r?r.n:'', phaseOf(f), f.zone,
       flex(f.kneeAngle).toFixed(2), flex(f.hipAngle).toFixed(2), f.ratio.toFixed(2),
       lightCols(f.t),
-      f.shX.toFixed(5), f.shY.toFixed(5), f.hipX.toFixed(5), f.hipY.toFixed(5),
-      f.kneeX.toFixed(5), f.kneeY.toFixed(5), f.ankX.toFixed(5), f.ankY.toFixed(5),
+      X(f.shX), Y(f.shY), X(f.hipX), Y(f.hipY),
+      X(f.kneeX), Y(f.kneeY), X(f.ankX), Y(f.ankY),
       f.vis.toFixed(3), f.side==='L'?'左':'右',
       nf(f.headOff,2), nf(f.trunkOff,2), nf(f.pelvisOff,2), nf(f.trunkTilt,2), nf(f.shTilt,2),
-      nf(f.comX,5), nf(f.comY,5), nf(f.comRelX,4), nf(f.comRelY,4), nf(f.comVel,4),
-      nf(f.footMidX,5), nf(f.footMidY,5), nf(f.scale,5) ].join(','));
+      X(f.comX), Y(f.comY), nf(f.comRelX,4), nf(f.comRelY,4), nf(f.comVel,4),
+      X(f.footMidX), Y(f.footMidY), nf(f.scale,5) ].join(','));
   });
   return lines.join('\n');
 }
@@ -3711,6 +3824,12 @@ function csvSummary(){
   if(sid) lines.push('対象者ID・メモ,'+sid);
   lines.push('年代,'+ageWord());
   lines.push('性別,'+sexWord());
+  lines.push('座標の原点（時系列CSV）,'+COORD.label());
+  if(runMode==='ana' && ANA.file){
+    lines.push('解析した動画,'+safeName(ANA.file.name));
+    lines.push('解析区間（動画時刻・秒）,'+ANA.from.toFixed(2)+'〜'+ANA.to.toFixed(2));
+    if(isFinite(ANA.t0)) lines.push('0秒とした位置（動画時刻・秒）,'+(ANA.t0/1000).toFixed(3));
+  }
   if(testType==='cs30'){
     lines.push('結果（回数）,'+repCount);
     const t=CS30_REF[sexKey()][ageKey()];
