@@ -649,13 +649,17 @@ const Voice={
         }
       }
     }catch(e){} },
-  say(t,{interrupt=false}={}){ if(this.mute||!voiceOn.checked||!this.supported) return;
+  /* 音声合成が読み間違える語を、読み上げるときだけ仮名に置き換える（画面表示は漢字のまま） */
+  READ:[['下肢の筋力低下','かしの、きんりょくていか'],['筋力低下','きんりょくていか'],['下肢機能','かしきのう'],['下肢','かし']],
+  fix(t){ let s=String(t); this.READ.forEach(([a,b])=>{ s=s.split(a).join(b); }); return s; },
+  say(t,{interrupt=false}={}){ if(this.mute||!voiceOn.checked||!this.supported) return; t=this.fix(t);
     try{ if(interrupt) window.speechSynthesis.cancel();
       if(window.speechSynthesis.paused) window.speechSynthesis.resume();
       const u=new SpeechSynthesisUtterance(t); u.lang='ja-JP'; u.rate=rateInput.value/100; u.volume=1;
       if(this.chosen) u.voice=this.chosen; window.speechSynthesis.speak(u);
     }catch(e){} },
   sayThen(t,cb){
+    t=this.fix(t);
     let done=false;
     const fire=()=>{ if(done) return; done=true; try{cb();}catch(e){} };
     if(this.mute||!voiceOn.checked||!this.supported){ setTimeout(fire,this.mute?0:300); return; }
