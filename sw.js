@@ -6,7 +6,7 @@
    RTMPose のモデルはページ側で 'cs30-models' に保存する。版を上げても消さない。
 */
 
-const VERSION = 'cs30-v1.10.0';
+const VERSION = 'cs30-v1.10.1';
 const SHELL_CACHE = 'shell-' + VERSION;
 const CDN_CACHE   = 'cdn-' + VERSION;
 

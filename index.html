@@ -267,17 +267,6 @@
     </div>
   </div>
 
-  <div class="panel" id="calPanel">
-    <div class="row" style="margin-top:0;">
-      <label for="seatH" style="flex:0 0 auto;font-weight:700;">長さの基準</label>
-      <span style="font-size:12px;color:#6b7d78;">座面高</span>
-      <input type="number" id="seatH" class="txt-in" value="40" min="20" max="80" step="0.5" style="max-width:70px;" />
-      <span style="font-size:12px;color:#6b7d78;">cm</span>
-      <button class="mini-btn" id="calBtn" style="flex:1;">床と座面を指定</button>
-    </div>
-    <div class="run-desc" id="calHint">座面高を入れ、映像の上で「座面の前の端の真下の床」→「座面の前の端」の順にタップすると、重心の位置と移動をcmで出します。</div>
-  </div>
-
   <div class="stage" id="stage">
     <video id="video" playsinline autoplay muted></video>
     <canvas id="overlay"></canvas>
@@ -299,6 +288,23 @@
       <div class="r-sub" id="resultSub"></div>
       <button id="resultClose">閉じる</button>
     </div>
+  </div>
+
+  <!-- 計測開始・リセットはカメラ映像のすぐ下に置く -->
+  <div class="controls" id="ctrlMain" style="padding-top:10px;">
+    <button class="btn start" id="startBtn">計測開始</button>
+    <button class="btn reset" id="resetBtn">リセット</button>
+  </div>
+
+  <div class="panel" id="calPanel">
+    <div class="row" style="margin-top:0;">
+      <label for="seatH" style="flex:0 0 auto;font-weight:700;">長さの基準</label>
+      <span style="font-size:12px;color:#6b7d78;">座面高</span>
+      <input type="number" id="seatH" class="txt-in" value="40" min="20" max="80" step="0.5" style="max-width:70px;" />
+      <span style="font-size:12px;color:#6b7d78;">cm</span>
+      <button class="mini-btn" id="calBtn" style="flex:1;">床と座面を指定</button>
+    </div>
+    <div class="run-desc" id="calHint">座面高を入れ、映像の上で「座面の前の端の真下の床」→「座面の前の端」の順にタップすると、重心の位置と移動をcmで出します。</div>
   </div>
 
   <div class="panel" id="anaPanel" style="display:none;">
@@ -404,10 +410,6 @@
     <div class="chart-cap" id="liveCap">両足首の中点を原点、肩幅を1とした相対座標です。</div>
   </div>
 
-  <div class="controls" id="ctrlMain">
-    <button class="btn start" id="startBtn">計測開始</button>
-    <button class="btn reset" id="resetBtn">リセット</button>
-  </div>
   <div class="controls sub" id="ctrlSub">
     <button class="btn primary" id="waveBtn">波形を見る</button>
     <button class="btn" id="csvTs">CSV（時系列）</button>
