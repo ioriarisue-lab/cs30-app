@@ -164,13 +164,16 @@
   .sect{padding:16px 18px 0;font-size:11px;font-weight:700;color:#8a9a96;letter-spacing:.08em;}
 
   /* 動作モードの選択 */
-  .run-row{display:flex;flex-direction:column;gap:8px;padding:8px 18px 0;}
-  .run-btn{text-align:left;padding:11px 14px;border-radius:10px;border:1px solid var(--line);background:#fff;cursor:pointer;}
-  .run-btn b{display:block;font-size:14px;color:#3d4d49;}
-  .run-btn span{display:block;font-size:11px;color:#7a8b86;margin-top:3px;line-height:1.55;}
-  .run-btn.active{background:var(--accent);border-color:var(--accent);}
-  .run-btn.active b{color:#fff;}
-  .run-btn.active span{color:#cfe3de;}
+  .run-row{display:flex;gap:8px;}
+  .run-btn{flex:1;min-height:52px;padding:8px 6px;border-radius:9px;border:1px solid var(--line);background:#fff;cursor:pointer;
+           font-size:14px;font-weight:700;line-height:1.3;color:#3d4d49;text-align:center;}
+  .run-btn.active{background:#16262a;border-color:#16262a;color:#fff;}
+  .run-desc{font-size:11px;color:#7a8b86;line-height:1.65;margin-top:7px;}
+  .eng-row{display:flex;gap:6px;flex:1;}
+  .eng-btn{flex:1;padding:7px 6px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer;
+           font-size:12px;font-weight:700;color:#3d4d49;line-height:1.25;}
+  .eng-btn small{font-weight:500;font-size:10px;}
+  .eng-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
 
   /* 解析の進捗 */
   .prog{height:8px;border-radius:5px;background:#e4ebe8;margin-top:12px;overflow:hidden;display:none;}
@@ -199,15 +202,8 @@
 <!-- ===================== 基本情報タブ ===================== -->
 <div class="pane active" id="paneInfo">
 
-  <div class="sect">動作モード</div>
-  <div class="run-row">
-    <button class="run-btn active" data-run="live">
-      <b>リアルタイム計測</b><span>カメラで撮りながら、回数と時間をその場で自動計測します</span></button>
-    <button class="run-btn" data-run="rec">
-      <b>撮影のみ</b><span>骨格は出さず、合図と時間だけ入れて動画を残します。あとから解析できます</span></button>
-    <button class="run-btn" data-run="ana">
-      <b>動画を解析</b><span>すでに撮ってある動画を読み込んで、回数と時間を計測します</span></button>
-  </div>
+  <div id="subjBox" style="margin-top:14px;"></div>
+  <div class="profile-row" id="profileRow"></div>
 
   <div class="sect">テスト種目</div>
   <div class="mode-row">
@@ -221,8 +217,7 @@
     <button class="mode-btn" data-mode="front">前方から撮影</button>
   </div>
 
-  <div class="sect">対象者</div>
-  <div class="profile-row">
+  <div class="profile-row" id="profileSrc">
     <select id="ageSel" aria-label="年代">
       <option value="20-29">20代</option><option value="30-39">30代</option>
       <option value="40-49">40代</option><option value="50-59">50代</option>
@@ -247,10 +242,47 @@
 <!-- ===================== 計測タブ ===================== -->
 <div class="pane" id="paneMeasure">
 
+  <div class="panel" id="modePanel" style="margin-top:12px;">
+    <div class="run-row">
+      <button class="run-btn active" data-run="live">リアルタイム<br>計測</button>
+      <button class="run-btn" data-run="rec">撮影のみ</button>
+      <button class="run-btn" data-run="ana">動画を<br>解析</button>
+    </div>
+    <div class="run-desc" id="runDesc"></div>
+    <div class="row" id="engineRow">
+      <label style="flex:0 0 auto;font-weight:700;">骨格推定</label>
+      <div class="eng-row">
+        <button class="eng-btn active" data-engine="mp">MediaPipe</button>
+        <button class="eng-btn" data-engine="rtm">RTMPose<br><small>Halpe26</small></button>
+      </div>
+    </div>
+    <div id="rtmBox" style="display:none;">
+      <div class="run-desc" id="rtmStatus">モデルを確認しています…</div>
+      <div class="row" style="margin-top:6px;">
+        <label class="mini-btn" for="rtmFile" style="flex:1;text-align:center;">モデルファイルを選ぶ（.onnx / .zip）</label>
+        <input type="file" id="rtmFile" accept=".onnx,.zip,application/zip,application/octet-stream" style="display:none;" />
+        <button class="mini-btn" id="rtmClear" style="flex:0 0 auto;">端末から削除</button>
+      </div>
+      <div class="run-desc" style="margin-top:6px;">OpenMMLabが配布しているRTMPoseのHalpe26モデル（例：rtmpose-s または rtmpose-m の 256x192）を、ZIPのまま選んでください。一度読み込めば、この端末に保存されて次回から通信なしで使えます。</div>
+    </div>
+  </div>
+
+  <div class="panel" id="calPanel">
+    <div class="row" style="margin-top:0;">
+      <label for="seatH" style="flex:0 0 auto;font-weight:700;">長さの基準</label>
+      <span style="font-size:12px;color:#6b7d78;">座面高</span>
+      <input type="number" id="seatH" class="txt-in" value="40" min="20" max="80" step="0.5" style="max-width:70px;" />
+      <span style="font-size:12px;color:#6b7d78;">cm</span>
+      <button class="mini-btn" id="calBtn" style="flex:1;">床と座面を指定</button>
+    </div>
+    <div class="run-desc" id="calHint">座面高を入れ、映像の上で「座面の前の端の真下の床」→「座面の前の端」の順にタップすると、重心の位置と移動をcmで出します。</div>
+  </div>
+
   <div class="stage" id="stage">
     <video id="video" playsinline autoplay muted></video>
     <canvas id="overlay"></canvas>
     <canvas id="roiCv" style="position:absolute;inset:0;width:100%;height:100%;display:none;touch-action:none;z-index:6;"></canvas>
+    <canvas id="calCv" style="position:absolute;inset:0;width:100%;height:100%;display:none;touch-action:none;z-index:7;cursor:crosshair;"></canvas>
     <div class="stage-overlay">
       <div class="tag-row"><div class="phase-tag" id="phaseTag">待機中</div><div class="rec-dot" id="recDot">● REC</div></div>
       <div class="cue" id="cueTag"></div>
@@ -712,8 +744,10 @@ function frameRow(m,t,vel){
     vis:m.vis,side:m.side,
     headOff:m.headOff,trunkOff:m.trunkOff,pelvisOff:m.pelvisOff,trunkTilt:m.trunkTilt,shTilt:m.shTilt,
     comX:m.comX,comY:m.comY,comRelX:m.comRelX,comRelY:m.comRelY,
+    comLow:m.comLow,comSubst:m.comSubst,
+    kneeL:m.kneeL,kneeR:m.kneeR,hipL:m.hipL,hipR:m.hipR,visL:m.visL,visR:m.visR,
     comVel:vel,
-    footMidX:m.footMidX,footMidY:m.footMidY,scale:m.scale};
+    footMidX:m.footMidX,footMidY:m.footMidY,scale:m.scale,signRef:m.signRef};
 }
 
 /* 3状態ゾーン管理 */
@@ -730,41 +764,67 @@ function angleAt(a,b,c){
   return Math.acos(cs)*180/Math.PI;
 }
 const IDX={NOSE:0,L_EAR:7,R_EAR:8,L_SH:11,R_SH:12,L_ELB:13,R_ELB:14,L_WR:15,R_WR:16,
-  L_HIP:23,R_HIP:24,L_KNEE:25,R_KNEE:26,L_ANK:27,R_ANK:28,L_HEEL:29,R_HEEL:30,L_TOE:31,R_TOE:32};
+  L_HIP:23,R_HIP:24,L_KNEE:25,R_KNEE:26,L_ANK:27,R_ANK:28,L_HEEL:29,R_HEEL:30,L_TOE:31,R_TOE:32,
+  L_PINKY:17,R_PINKY:18,L_IDX:19,R_IDX:20};
 
 /* ===== 重心の推定 =====
-   Winter DA, Biomechanics and Motor Control of Human Movement の身体分節パラメータを用い、
-   各分節の質量比と分節内の重心位置から全身重心を加重平均で求める。
-   [近位点, 遠位点, 近位からの重心比, 質量比] */
-const SEGMENTS=[
-  ['earMid','shMid',0.50,0.081],   /* 頭頸部 */
-  ['shMid','hipMid',0.50,0.497],   /* 体幹 */
-  ['L_SH','L_ELB',0.436,0.028],  ['R_SH','R_ELB',0.436,0.028],   /* 上腕 */
-  ['L_ELB','L_WR',0.430,0.022],  ['R_ELB','R_WR',0.430,0.022],   /* 前腕＋手 */
-  ['L_HIP','L_KNEE',0.433,0.100],['R_HIP','R_KNEE',0.433,0.100], /* 大腿 */
-  ['L_KNEE','L_ANK',0.433,0.0465],['R_KNEE','R_ANK',0.433,0.0465],/* 下腿 */
-  ['L_ANK','L_TOE',0.50,0.0145], ['R_ANK','R_TOE',0.50,0.0145]   /* 足部 */
-];
-const VIS_MIN=0.35;
+   阿江通良・湯海鵬・横井孝志「日本人アスリートの身体部分慣性特性の推定」バイオメカニズム11, 1992 の
+   身体部分係数（質量比・質量中心位置比）を用い、14分節の加重平均で全身重心を求める。性別で係数を切り替える。
+   質量中心位置比は分節の上端（近位端）からの比。MediaPipeの点との対応は次のとおり。
+     頭部：頭頂〜左右耳珠点の中点 … 頭頂は点がないため、耳の中点から首の向き（肩中点→耳中点）へ延長して推定
+     胴体：胸骨上縁〜左右大転子の中点 … 左右肩の中点〜左右股関節の中点で代用
+     上腕：肩峰〜橈骨点（肩〜肘）／前腕：橈骨点〜茎状突起（肘〜手首）／手：茎状突起〜第3中手骨頭（手首〜人差し指と小指の付け根の中点）
+     大腿：大転子〜脛骨点（股関節〜膝）／下腿：脛骨点〜外果（膝〜足首）／足：踵点〜つま先点（踵〜つま先）
+   左右の分節はどちらも必ず計算に含める（両側計測）。隠れた側も MediaPipe の推定座標を使い、
+   座標そのものが得られないときだけ、横からの撮影では反対側の同じ点で代用する。 */
+const AE={
+  /*            質量比, 質量中心位置比（上端から） */
+  male:  {head:[0.069,0.821], trunk:[0.489,0.493], uarm:[0.027,0.529], farm:[0.016,0.415], hand:[0.006,0.891],
+          thigh:[0.110,0.475], shank:[0.051,0.406], foot:[0.011,0.405]},
+  female:{head:[0.075,0.759], trunk:[0.457,0.506], uarm:[0.026,0.523], farm:[0.015,0.423], hand:[0.006,0.908],
+          thigh:[0.123,0.458], shank:[0.053,0.410], foot:[0.011,0.406]}
+};
+/* 頭頂〜耳珠点の長さを、耳〜肩の距離に対する比で近似する（立位の身長比から：頭頂〜耳珠 約0.07H、耳珠〜肩峰 約0.115H） */
+const HEAD_LEN_RATIO=0.6;
+const VIS_LOW=0.5;   /* これ未満の点は「信頼度が低い点」として数える（計算からは外さない） */
+const SIDE_PAIRS={L_SH:'R_SH',L_ELB:'R_ELB',L_WR:'R_WR',L_HIP:'R_HIP',L_KNEE:'R_KNEE',L_ANK:'R_ANK',
+  L_HEEL:'R_HEEL',L_TOE:'R_TOE',L_EAR:'R_EAR',L_IDX:'R_IDX',L_PINKY:'R_PINKY'};
+Object.keys(SIDE_PAIRS).forEach(k=>{ SIDE_PAIRS[SIDE_PAIRS[k]]=k; });
 
 function estimateCoM(lm){
-  const mid=(a,b)=>({x:(lm[a].x+lm[b].x)/2, y:(lm[a].y+lm[b].y)/2,
-                     visibility:Math.min(lm[a].visibility||0,lm[b].visibility||0)});
-  const pts={
-    earMid:mid(IDX.L_EAR,IDX.R_EAR), shMid:mid(IDX.L_SH,IDX.R_SH), hipMid:mid(IDX.L_HIP,IDX.R_HIP)
+  const ok=p=>p && isFinite(p.x) && isFinite(p.y);
+  const subst=[];
+  const P=k=>{
+    let p=lm[IDX[k]];
+    if(!ok(p) && mode==='side' && SIDE_PAIRS[k]){ const q=lm[IDX[SIDE_PAIRS[k]]]; if(ok(q)){ p=q; subst.push(k);} }
+    return ok(p)? p : null;
   };
-  const get=k=>pts[k] || lm[IDX[k]];
-  let mx=0,my=0,mass=0;
-  for(const [a,b,r,m] of SEGMENTS){
-    const p=get(a), q=get(b);
-    if(!p||!q) continue;
-    if((p.visibility||0)<VIS_MIN || (q.visibility||0)<VIS_MIN) continue;
-    mx += (p.x+(q.x-p.x)*r)*m;
-    my += (p.y+(q.y-p.y)*r)*m;
-    mass += m;
+  const mid=(a,b)=>{ const p=P(a), q=P(b); if(!p||!q) return null;
+    return {x:(p.x+q.x)/2, y:(p.y+q.y)/2, visibility:Math.min(p.visibility||0,q.visibility||0)}; };
+  const C=AE[sexKey()]||AE.male;
+  const shMid=mid('L_SH','R_SH'), hipMid=mid('L_HIP','R_HIP'), earMid=mid('L_EAR','R_EAR');
+  const segs=[];   /* [上端, 下端, 位置比, 質量比] */
+  if(earMid && shMid){
+    /* 頭頂：RTMPose（Halpe26）は頭頂の点を出すのでそれを使う。MediaPipe は首の向きに延長して推定 */
+    const top = (lm.headTop && isFinite(lm.headTop.x)) ? lm.headTop
+      : {x:earMid.x+(earMid.x-shMid.x)*HEAD_LEN_RATIO, y:earMid.y+(earMid.y-shMid.y)*HEAD_LEN_RATIO};
+    segs.push([top, earMid, C.head[1], C.head[0]]);
   }
-  if(mass<0.4) return null;   /* 検出できた分節が少なすぎる場合は算出しない */
-  return {x:mx/mass, y:my/mass, coverage:mass};
+  if(shMid && hipMid) segs.push([shMid, hipMid, C.trunk[1], C.trunk[0]]);
+  ['L','R'].forEach(sd=>{
+    const g=k=>P(sd+'_'+k);
+    const hand = (()=>{ const a=g('IDX'), b=g('PINKY'); return (a&&b)?{x:(a.x+b.x)/2,y:(a.y+b.y)/2}:null; })();
+    [[g('SH'),g('ELB'),C.uarm],[g('ELB'),g('WR'),C.farm],[g('WR'),hand,C.hand],
+     [g('HIP'),g('KNEE'),C.thigh],[g('KNEE'),g('ANK'),C.shank],[g('HEEL'),g('TOE'),C.foot]]
+      .forEach(([a,b,c])=>{ if(a&&b) segs.push([a,b,c[1],c[0]]); });
+  });
+  let mx=0,my=0,mass=0;
+  for(const [a,b,r,m] of segs){ mx+=(a.x+(b.x-a.x)*r)*m; my+=(a.y+(b.y-a.y)*r)*m; mass+=m; }
+  if(mass<0.6) return null;
+  /* 信頼度が低い点の数（両側の主要13点） */
+  const keys=['L_EAR','R_EAR','L_SH','R_SH','L_ELB','R_ELB','L_WR','R_WR','L_HIP','R_HIP','L_KNEE','R_KNEE','L_ANK','R_ANK'];
+  const low=keys.filter(k=>{ const p=lm[IDX[k]]; return !p || (p.visibility||0)<VIS_LOW; }).length;
+  return {x:mx/mass, y:my/mass, coverage:mass, low, subst:subst.length};
 }
 function pickSide(lm){
   const l=(lm[IDX.L_HIP].visibility||0)+(lm[IDX.L_KNEE].visibility||0)+(lm[IDX.L_ANK].visibility||0);
@@ -779,6 +839,11 @@ function measure(lm){
   const knee=lm[s==='L'?IDX.L_KNEE:IDX.R_KNEE], ank=lm[s==='L'?IDX.L_ANK:IDX.R_ANK];
   const kneeAngle=angleAt(hip,knee,ank);
   const hipAngle=angleAt(sh,hip,knee);
+  /* 両側の角度（判定は信頼度の高い側で行い、CSVには左右とも出す） */
+  const angLR=sd=>{ const g=k=>lm[IDX[sd+'_'+k]];
+    return {knee:angleAt(g('HIP'),g('KNEE'),g('ANK')), hip:angleAt(g('SH'),g('HIP'),g('KNEE')),
+            vis:Math.min(g('HIP').visibility||0,g('KNEE').visibility||0,g('ANK').visibility||0)}; };
+  const AL=angLR('L'), AR=angLR('R');
 
   const hipY=(lm[IDX.L_HIP].y+lm[IDX.R_HIP].y)/2;
   const ankY=(lm[IDX.L_ANK].y+lm[IDX.R_ANK].y)/2;
@@ -842,6 +907,8 @@ function measure(lm){
           shX:sh.x,shY:sh.y,hipX:hip.x,hipY:hip.y,kneeX:knee.x,kneeY:knee.y,ankX:ank.x,ankY:ank.y,vis,
           headOff,trunkOff,pelvisOff,trunkTilt,shTilt,
           comX,comY,comRelX,comRelY,
+          comLow: com? com.low : NaN, comSubst: com? com.subst : NaN,
+          kneeL:AL.knee, kneeR:AR.knee, hipL:AL.hip, hipR:AR.hip, visL:AL.vis, visR:AR.vis,
           footMidX:footMid.x,footMidY:footMid.y,scale:scale,signRef:signRef};
 }
 
@@ -1260,7 +1327,7 @@ function renderPosture(){
     +(mode==='front'
       ? '正の値は対象者から見て左、負の値は右への偏りを示します。'
       : '正の値は前方、負の値は後方への偏りを示します。')
-    +'<br>重心はWinterの身体分節パラメータによる推定値です。詳しい軌跡は「波形を見る」の'
+    +'<br>重心は阿江らの身体部分係数（1992）による推定値です。詳しい軌跡は「波形を見る」の'
     +'「重心の軌跡」タブで確認できます。'
     +'<br>左右差の判定はあくまで画像上の見え方であり、カメラの設置角度がずれていると偏って計測されます。'
     +'正面（または真横）から、レンズの高さを対象者の腰の高さに合わせて撮影してください。</div>';
@@ -1723,6 +1790,111 @@ const LIGHT={
 };
 
 /* --- 範囲の指定（映像の上をなぞる） --- */
+/* ===== 長さの基準（椅子の座面高）=====
+   映像上で「座面の前の端の真下の床」(p1) と「座面の前の端」(p2) を指定し、その長さを座面高(cm)とする。
+   p1 を原点、p1→p2 の向きを上方向（カメラの傾きも補正される）、それに直交する向きを前後（側方）・左右（前方）とする。 */
+const CAL={
+  p1:null, p2:null, W:0, H:0, picking:false, tmp:null,
+  seat(){ const v=parseFloat($('seatH').value); return isFinite(v)&&v>0?v:NaN; },
+  ok(){ return !!(this.p1&&this.p2&&this.W&&this.H&&isFinite(this.seat())&&this.pxLen()>5)
+           && (!video.videoWidth || (video.videoWidth===this.W && video.videoHeight===this.H)); },
+  reset(){ this.p1=this.p2=null; this.tmp=null; this.picking=false; $('calCv').style.display='none'; this.hint(); },
+  pxLen(){ if(!this.p1||!this.p2) return 0; return Math.hypot((this.p2.x-this.p1.x)*this.W,(this.p2.y-this.p1.y)*this.H); },
+  k(){ return this.seat()/this.pxLen(); },   /* cm/画素 */
+  /* 正規化座標 → cm（前後または左右, 高さ）。sign は対象者の前方（前方撮影では左）を正にする符号 */
+  toCm(nx,ny,sign){
+    if(!this.ok() || !isFinite(nx) || !isFinite(ny)) return null;
+    const L=this.pxLen(), ux=(this.p2.x-this.p1.x)*this.W/L, uy=(this.p2.y-this.p1.y)*this.H/L;   /* 上向きの単位ベクトル（画素） */
+    const fx=-uy, fy=ux;                                                                         /* 直交方向 */
+    const dx=(nx-this.p1.x)*this.W, dy=(ny-this.p1.y)*this.H;
+    let h=(dx*ux+dy*uy)*this.k(), f=(dx*fx+dy*fy)*this.k();
+    /* 直交方向の向きは画面の右向きにそろえてから、対象者の前方を正にする */
+    if(fx<0) f=-f;
+    return {x:f*(sign||1), y:h};
+  },
+  hint(){
+    const el=$('calHint'); if(!el) return;
+    if(this.ok()){
+      el.textContent='基準：座面高 '+this.seat().toFixed(1)+' cm ＝ '+this.pxLen().toFixed(0)+' 画素（1画素 '+this.k().toFixed(3)+' cm）。'
+        +'原点は座面の前の端の真下の床です。カメラを動かしたら指定し直してください。';
+      $('calBtn').textContent='指定し直す';
+    }else{
+      el.textContent='座面高を入れ、映像の上で「座面の前の端の真下の床」→「座面の前の端」の順にタップすると、重心の位置と移動をcmで出します。';
+      $('calBtn').textContent='床と座面を指定';
+    }
+  }
+};
+$('seatH').addEventListener('change',()=>{ CAL.hint(); updateComReadout(); });
+(function calPicker(){
+  const cv=$('calCv');
+  const R=()=>stage.getBoundingClientRect();
+  const toVideo=(px,py)=>{
+    const r=R(), vw=video.videoWidth||1, vh=video.videoHeight||1;
+    const sc=Math.max(r.width/vw, r.height/vh), dw=vw*sc, dh=vh*sc;
+    const ox=(dw-r.width)/2, oy=(dh-r.height)/2;
+    return {x:Math.min(1,Math.max(0,(px+ox)/dw)), y:Math.min(1,Math.max(0,(py+oy)/dh))};
+  };
+  const toScreen=p=>{
+    const r=R(), vw=video.videoWidth||1, vh=video.videoHeight||1;
+    const sc=Math.max(r.width/vw, r.height/vh), dw=vw*sc, dh=vh*sc;
+    const ox=(dw-r.width)/2, oy=(dh-r.height)/2;
+    let x=p.x*dw-ox; if(stage.classList.contains('mirror')) x=r.width-x;
+    return {x, y:p.y*dh-oy};
+  };
+  const draw=()=>{
+    const r=R(), dpr=window.devicePixelRatio||1;
+    cv.width=r.width*dpr; cv.height=r.height*dpr;
+    const c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0);
+    c.clearRect(0,0,r.width,r.height);
+    c.fillStyle='rgba(0,0,0,.25)'; c.fillRect(0,0,r.width,r.height);
+    c.fillStyle='#fff'; c.font='bold 13px sans-serif';
+    c.fillText(CAL.tmp ? '② 座面の前の端をタップ' : '① 座面の前の端の真下の床をタップ', 12, 22);
+    if(CAL.tmp){
+      const a=toScreen(CAL.tmp);
+      c.strokeStyle='#ffd400'; c.lineWidth=2;
+      c.beginPath(); c.moveTo(a.x-10,a.y); c.lineTo(a.x+10,a.y); c.moveTo(a.x,a.y-10); c.lineTo(a.x,a.y+10); c.stroke();
+    }
+  };
+  cv.addEventListener('pointerdown',e=>{
+    if(!CAL.picking) return;
+    e.preventDefault();
+    const r=R(); let px=e.clientX-r.left;
+    if(stage.classList.contains('mirror')) px=r.width-px;
+    const p=toVideo(px, e.clientY-r.top);
+    if(!CAL.tmp){ CAL.tmp=p; draw(); return; }
+    CAL.p1=CAL.tmp; CAL.p2=p; CAL.tmp=null; CAL.W=video.videoWidth; CAL.H=video.videoHeight;
+    CAL.picking=false; cv.style.display='none';
+    if(CAL.pxLen()<20){ CAL.p1=CAL.p2=null; banner('info','2点が近すぎます。床と座面の前の端を指定し直してください。'); }
+    CAL.hint(); updateComReadout(); drawLive(true);
+    /* 動画解析では映像が止まっているので、その場で基準線を描いておく */
+    if(runMode==='ana' && canvas.width){
+      if(renderMode.value==='canvas') ctx.drawImage(video,0,0,canvas.width,canvas.height); else ctx.clearRect(0,0,canvas.width,canvas.height);
+      CAL.drawOn(ctx,canvas.width,canvas.height);
+    }
+  });
+  $('calBtn').addEventListener('click',async()=>{
+    if(running || ANA.busy){ banner('info','計測中・解析中は指定できません。'); return; }
+    if(runMode==='ana'){
+      if(!ANA.file){ banner('info','先に動画ファイルを選んでください。'); return; }
+      try{ if(!ANA.url) await anaLoadVideo(); }catch(e){}
+    }else if(!S.started){ banner('info','先にカメラを開始してください。'); return; }
+    if(!video.videoWidth){ banner('info','映像が表示されてから指定してください。'); return; }
+    CAL.picking=true; CAL.tmp=null; cv.style.display='block'; draw();
+  });
+  /* 基準線を映像に重ねる（指定済みのとき） */
+  CAL.drawOn=(c,w,h)=>{
+    if(!CAL.ok()) return;
+    if(video.videoWidth!==CAL.W || video.videoHeight!==CAL.H) return;
+    const a={x:CAL.p1.x*w,y:CAL.p1.y*h}, b={x:CAL.p2.x*w,y:CAL.p2.y*h};
+    c.save(); c.strokeStyle='#ffd400'; c.lineWidth=Math.max(2,w/320); c.setLineDash([6,4]);
+    c.beginPath(); c.moveTo(a.x,a.y); c.lineTo(b.x,b.y); c.stroke(); c.setLineDash([]);
+    c.fillStyle='#ffd400'; [a,b].forEach(p=>{ c.beginPath(); c.arc(p.x,p.y,Math.max(3,w/200),0,Math.PI*2); c.fill(); });
+    c.font='bold '+Math.round(Math.max(12,w/45))+'px sans-serif';
+    c.fillText(CAL.seat().toFixed(0)+' cm', b.x+8, (a.y+b.y)/2);
+    c.restore();
+  };
+})();
+
 (function roiPicker(){
   const cv=$('roiCv'); if(!cv) return;
   let drag=null;
@@ -1831,6 +2003,7 @@ $('anaFile').addEventListener('change',e=>{
   ANA.t0=NaN;
   LIGHT.samples=[]; LIGHT.onsets=[]; LIGHT.draw(); $('lightHint').textContent='';
   $('rangeBox').style.display='none'; RANGE.dur=0;
+  CAL.reset();   /* 動画ごとにカメラの位置が違うので、長さの基準は指定し直す */
   if(!f){ anaHint('動画ファイルを選んでください。'); return; }
   anaHint(f.name+'\n'+(f.size/1048576).toFixed(1)+'MB　読み込んでいます…');
   anaLoadVideo().then(dur=>{
@@ -1946,8 +2119,9 @@ async function analyzeRun(){
   anaProgress(0);
   anaHint('動画を読み込んでいます…');
   try{
-    if(!S.poseReady && !S.poseErr) await initPose();
+    if(!S.poseReady) await ensurePose();
     if(S.poseErr) throw new Error('骨格検出を使えません（'+S.poseErr+'）');
+    RTM.track=null; RTM.lastT=null;
     const dur=await anaLoadVideo();
     if(!RANGE.dur) RANGE.init(dur);
     const rg=RANGE.get();
@@ -2152,7 +2326,13 @@ function applyRunMode(){
 
   startBtn.textContent = rec?'撮影を開始':'計測開始';
   startBtn.disabled=false;
-  $('toMeasure').textContent = ana?'解析に進む':(rec?'撮影に進む':'計測に進む');
+  $('runDesc').textContent =
+    live ? 'カメラで撮りながら、回数と時間をその場で自動計測します。'
+  : rec  ? '骨格は出さず、合図と時間だけ入れて動画を残します。あとから「動画を解析」で計測できます。'
+         : 'すでに撮ってある動画を読み込んで、回数と時間を計測します。';
+  $('engineRow').style.display = rec?'none':'flex';
+  $('calPanel').style.display = rec?'none':'block';
+  $('rtmBox').style.display = (!rec && Engine.kind==='rtm')?'block':'none';
 
   if(rec){
     $('recordOn').checked=true;
@@ -2163,10 +2343,7 @@ function applyRunMode(){
     $('recSource').disabled=false;
   }
 
-  $('infoHint').textContent =
-    live ? 'カメラで撮りながら計測します。種目・撮影方向・対象者を確認してから「計測に進む」を押してください。'
-  : rec  ? '骨格を出さずに、合図と時間だけ入れて動画を残します。計測はあとから「動画を解析」で行えます。'
-         : 'すでにある動画から計測します。撮影方向は動画に合わせて選んでください。';
+  $('infoHint').textContent = '対象者・種目・撮影方向を確認してから「計測に進む」を押してください。計測のしかた（リアルタイム計測／撮影のみ／動画を解析）は計測タブで選べます。';
 
   if(ana){
     stopCamera();
@@ -2207,9 +2384,18 @@ $('toMeasure').addEventListener('click',()=>{
   const box=$('infoSettings');
   const card=document.createElement('div');
   card.className='panel';
-  card.innerHTML='<h3>対象者ID・メモ</h3>';
+  card.innerHTML='<h3>対象者</h3>';
+  $('subjRow').querySelector('label').textContent='ID・メモ';
   card.appendChild($('subjRow'));
-  box.appendChild(card);
+  const row=document.createElement('div'); row.className='row';
+  row.innerHTML='<label style="flex:0 0 auto;">年代・性別</label>';
+  const src=$('profileSrc');
+  [...src.querySelectorAll('select')].forEach(sel=>{ sel.style.flex='1'; sel.style.minWidth='0'; row.appendChild(sel); });
+  card.appendChild(row);
+  const note=document.createElement('div'); note.className='run-desc'; note.textContent='ID・メモは保存するファイル名に入ります。年代・性別は基準値の判定と重心の計算に使います。';
+  card.appendChild(note);
+  $('subjBox').appendChild(card);
+  src.remove(); $('profileRow').remove();
   box.appendChild($('recPanel'));
   box.appendChild($('voicePanel'));
   box.appendChild($('thPanel'));
@@ -2525,6 +2711,14 @@ function drawLive(force){
 
 /* 数値の表示を更新する */
 function updateComReadout(){
+  const lm=S.lastM;
+  if(CAL.ok() && lm && isFinite(lm.comX)){
+    const c=CAL.toCm(lm.comX, lm.comY, lm.signRef);
+    $('comXLabel').textContent = mode === 'front' ? '重心 左右（cm）' : '重心 前後（cm・座面前端から）';
+    $('comXValue').textContent = c ? (c.x>=0?'+':'')+c.x.toFixed(1) : '--';
+    $('comYValue').textContent = c ? c.y.toFixed(1)+' cm' : '--';
+    return;
+  }
   const n = ComLive.trail.length;
   if(!n){ $('comXValue').textContent = '--'; $('comYValue').textContent = '--'; return; }
   const c = ComLive.trail[n - 1];
@@ -2558,6 +2752,7 @@ function onResults(res){
       drawConnectors(ctx,res.poseLandmarks,POSE_CONNECTIONS,{color:SkelColor.current,lineWidth:3});
       drawLandmarks(ctx,res.poseLandmarks,{color:SkelColor.dotColor(),lineWidth:1,radius:2.5});
     }
+    CAL.drawOn(ctx,canvas.width,canvas.height);
     ANA.raw.push({at:video.currentTime*1000, m:measure(res.poseLandmarks)});
     return;
   }
@@ -2570,6 +2765,8 @@ function onResults(res){
     drawLandmarks(ctx,res.poseLandmarks,{color:SkelColor.dotColor(),lineWidth:1,radius:2.5});
   }
   const m=measure(res.poseLandmarks);
+  S.lastM=m;
+  if(CAL.drawOn) CAL.drawOn(ctx,canvas.width,canvas.height);
   const t=running&&startTs!==null ? performance.now()-startTs : null;
 
   /* 重心をためて、映像とライブグラフに描く（計測していなくても表示する） */
@@ -2584,16 +2781,261 @@ function onResults(res){
   updateZone(zoneOf(m), t!==null?t:performance.now());
 }
 async function initPose(){
-  if(typeof Pose==='undefined'){ S.poseErr='MediaPipeライブラリを読み込めませんでした（通信環境を確認）'; return; }
+  if(S.mpPose || S.mpErr) return;
+  if(typeof Pose==='undefined'){ S.mpErr='MediaPipeライブラリを読み込めませんでした（通信環境を確認）'; return; }
   try{
-    S.pose=new Pose({locateFile:f=>'https://cdn.jsdelivr.net/npm/@mediapipe/pose/'+f});
-    S.pose.setOptions({modelComplexity:1,smoothLandmarks:true,enableSegmentation:false,
-                       minDetectionConfidence:.6,minTrackingConfidence:.6});
-    S.pose.onResults(onResults);
-    await S.pose.initialize();
-    S.poseReady=true;
-  }catch(e){ S.poseErr=String(e&&e.message||e); }
+    const p=new Pose({locateFile:f=>'https://cdn.jsdelivr.net/npm/@mediapipe/pose/'+f});
+    p.setOptions({modelComplexity:1,smoothLandmarks:true,enableSegmentation:false,
+                  minDetectionConfidence:.6,minTrackingConfidence:.6});
+    p.onResults(onResults);
+    await p.initialize();
+    S.mpPose=p;
+  }catch(e){ S.mpErr=String(e&&e.message||e); }
 }
+
+/* ===== 骨格推定の切り替え（MediaPipe / RTMPose Halpe26） ===== */
+const Engine={
+  kind:'mp',
+  label(){ return this.kind==='rtm' ? ('RTMPose（Halpe26）'+(RTM.name?'・'+RTM.name:'')) : 'MediaPipe Pose'; }
+};
+/* 選ばれている骨格推定を使える状態にして S.pose に入れる */
+async function ensurePose(){
+  if(Engine.kind==='rtm'){
+    await RTM.ensure();
+    if(RTM.ready){ S.pose=RTM.adapter; S.poseReady=true; S.poseErr=null; }
+    else { S.pose=null; S.poseReady=false; S.poseErr=RTM.err||'RTMPoseのモデルが読み込まれていません'; }
+  }else{
+    await initPose();
+    S.pose=S.mpPose||null; S.poseReady=!!S.mpPose; S.poseErr=S.mpPose?null:(S.mpErr||'MediaPipeを初期化できませんでした');
+  }
+}
+async function setEngine(kind){
+  if(running || ANA.busy){ banner('info','計測中・解析中は骨格推定を切り替えられません。'); return; }
+  Engine.kind=kind;
+  try{ localStorage.setItem('cs30-engine',kind); }catch(e){}
+  document.querySelectorAll('.eng-btn').forEach(b=>b.classList.toggle('active',b.dataset.engine===kind));
+  $('rtmBox').style.display=(kind==='rtm' && runMode!=='rec')?'block':'none';
+  S.poseReady=false; S.sending=false;
+  await ensurePose();
+  if(S.poseErr) banner('info','<b>骨格推定を使えません。</b><br>'+S.poseErr); else clearBanner();
+}
+document.querySelectorAll('.eng-btn').forEach(b=>b.addEventListener('click',()=>setEngine(b.dataset.engine)));
+
+/* ===== RTMPose（Halpe26）=====
+   ONNX Runtime Web で端末内で推論する。人物検出器は使わず、前のコマの骨格から切り出し範囲を決める
+   （1人だけが映るテストのため）。最初のコマや見失ったときは画面全体から探し、もう一度切り出して推定し直す。
+   前処理は mmpose / rtmlib と同じ：切り出し範囲を1.25倍に広げ、入力の縦横比（192×256）に合わせて拡大縮小し、
+   RGB を平均 [123.675,116.28,103.53]・標準偏差 [58.395,57.12,57.375] で正規化する。
+   出力（SimCC）は各点の x・y の分布で、最大値の位置を座標（分割比2）、x・y の最大値の小さい方をスコアとする。 */
+const ORT_VER='1.30.0';
+const ORT_BASE='https://cdn.jsdelivr.net/npm/onnxruntime-web@'+ORT_VER+'/dist/';
+const RTM_REPO_PATH='models/rtmpose-halpe26.onnx';   /* GitHubのリポジトリに置いた場合はここから読む */
+const RTM_CACHE='cs30-models', RTM_KEY='./__model/rtmpose-halpe26.onnx';
+/* Halpe26 → MediaPipe 33点の番号 */
+const HALPE2MP={0:0, 1:2, 2:5, 3:7, 4:8, 5:11, 6:12, 7:13, 8:14, 9:15, 10:16, 11:23, 12:24, 13:25, 14:26,
+                15:27, 16:28, 24:29, 25:30, 20:31, 21:32};
+const RTM={
+  ready:false, err:null, name:'', session:null, inW:192, inH:256, ep:'', loading:null, track:null, lastT:null,
+  cv:null, cx:null,
+  status(t){ const el=$('rtmStatus'); if(el) el.textContent=t; },
+  async loadOrt(){
+    if(window.ort) return;
+    await new Promise((ok,ng)=>{
+      const sc=document.createElement('script'); sc.src=ORT_BASE+'ort.min.js'; sc.crossOrigin='anonymous';
+      sc.onload=ok; sc.onerror=()=>ng(new Error('ONNX Runtime を読み込めませんでした（初回は通信が必要です）'));
+      document.head.appendChild(sc);
+    });
+    ort.env.wasm.wasmPaths=ORT_BASE;
+  },
+  /* 保存済み → リポジトリの models/ の順に探す */
+  async findModel(){
+    try{
+      const c=await caches.open(RTM_CACHE); const r=await c.match(RTM_KEY);
+      if(r) return {buf:await r.arrayBuffer(), name:decodeURIComponent(r.headers.get('x-model-name')||'保存済みモデル')};
+    }catch(e){}
+    try{
+      const r=await fetch(RTM_REPO_PATH,{cache:'no-cache'});
+      if(r.ok){ const buf=await r.arrayBuffer(); await this.save(buf,'rtmpose-halpe26.onnx'); return {buf,name:'rtmpose-halpe26.onnx'}; }
+    }catch(e){}
+    return null;
+  },
+  async save(buf,name){
+    try{
+      const c=await caches.open(RTM_CACHE);
+      await c.put(RTM_KEY,new Response(buf,{headers:{'content-type':'application/octet-stream','x-model-name':encodeURIComponent(name)}}));
+    }catch(e){}
+  },
+  async clear(){
+    try{ const c=await caches.open(RTM_CACHE); await c.delete(RTM_KEY); }catch(e){}
+    this.ready=false; this.session=null; this.name='';
+    this.status('モデルを端末から削除しました。使うときはもう一度モデルファイルを選んでください。');
+    if(Engine.kind==='rtm'){ S.poseReady=false; S.pose=null; }
+  },
+  /* ZIP の中から .onnx を取り出す（OpenMMLab の配布ZIPをそのまま読めるように） */
+  async unzipOnnx(buf){
+    const dv=new DataView(buf), u8=new Uint8Array(buf);
+    let eocd=-1;
+    for(let i=buf.byteLength-22;i>=Math.max(0,buf.byteLength-65557);i--){ if(dv.getUint32(i,true)===0x06054b50){eocd=i;break;} }
+    if(eocd<0) throw new Error('ZIPを読めませんでした');
+    const n=dv.getUint16(eocd+10,true); let p=dv.getUint32(eocd+16,true);
+    const td=new TextDecoder();
+    for(let k=0;k<n;k++){
+      if(dv.getUint32(p,true)!==0x02014b50) break;
+      const method=dv.getUint16(p+10,true), csize=dv.getUint32(p+20,true);
+      const nl=dv.getUint16(p+28,true), el=dv.getUint16(p+30,true), cl=dv.getUint16(p+32,true), off=dv.getUint32(p+42,true);
+      const name=td.decode(u8.subarray(p+46,p+46+nl));
+      if(/\.onnx$/i.test(name)){
+        const lnl=dv.getUint16(off+26,true), lel=dv.getUint16(off+28,true);
+        const data=u8.subarray(off+30+lnl+lel, off+30+lnl+lel+csize);
+        if(method===0) return {buf:data.slice().buffer, name:name.split('/').pop()};
+        if(method===8){
+          const ds=new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+          return {buf:await new Response(ds).arrayBuffer(), name:name.split('/').pop()};
+        }
+        throw new Error('このZIPの圧縮形式には対応していません');
+      }
+      p+=46+nl+el+cl;
+    }
+    throw new Error('ZIPの中に .onnx ファイルが見つかりません');
+  },
+  async open(buf,name){
+    await this.loadOrt();
+    this.status('モデルを準備しています…');
+    let sess=null, ep='';
+    const tries = navigator.gpu ? [['webgpu'],['wasm']] : [['wasm']];
+    for(const eps of tries){
+      try{ sess=await ort.InferenceSession.create(buf,{executionProviders:eps, graphOptimizationLevel:'all'}); ep=eps[0]; break; }
+      catch(e){ if(eps[0]==='wasm') throw e; }
+    }
+    this.session=sess; this.ep=ep; this.name=name;
+    /* 入力サイズを決める（Halpe26 の t/s/m/l は 256×192、x は 384×288） */
+    const sizes=/384x288/.test(name)?[[288,384],[192,256]]:[[192,256],[288,384]];
+    let okSize=null;
+    for(const [w,h] of sizes){
+      try{ const t=new ort.Tensor('float32',new Float32Array(3*w*h),[1,3,h,w]);
+           const o=await sess.run({[sess.inputNames[0]]:t}); okSize=[w,h];
+           const ox=o[sess.outputNames[0]];
+           if(!ox || ox.dims.length!==3 || ox.dims[1]<26) throw new Error('Halpe26（26点）のモデルではないようです');
+           break; }
+      catch(e){ if(/Halpe26/.test(e.message)) throw e; }
+    }
+    if(!okSize) throw new Error('モデルの入力サイズを判定できませんでした');
+    [this.inW,this.inH]=okSize;
+    this.ready=true; this.err=null; this.track=null;
+    this.status('読み込み済み：'+name+'（入力 '+this.inH+'×'+this.inW+'、'+(ep==='webgpu'?'GPU':'CPU')+'で実行）');
+  },
+  async ensure(){
+    if(this.ready) return;
+    if(this.loading) return this.loading;
+    this.loading=(async()=>{
+      try{
+        this.status('モデルを探しています…');
+        const m=await this.findModel();
+        if(!m){ this.err='RTMPoseのモデルがまだ読み込まれていません。計測タブの「モデルファイルを選ぶ」から読み込んでください。';
+                this.status('モデルが未読込です。下のボタンからモデルファイルを選んでください。'); return; }
+        await this.open(m.buf,m.name);
+      }catch(e){ this.err='RTMPoseを準備できませんでした：'+String(e&&e.message||e); this.status(this.err); }
+      finally{ this.loading=null; }
+    })();
+    return this.loading;
+  },
+  async fromFile(f){
+    try{
+      this.status('ファイルを読み込んでいます…');
+      let buf=await f.arrayBuffer(), name=f.name;
+      if(/\.zip$/i.test(f.name)){ const z=await this.unzipOnnx(buf); buf=z.buf; name=f.name.replace(/\.zip$/i,'')+'（'+z.name+'）'; }
+      this.ready=false;
+      await this.open(buf,name);
+      await this.save(buf,name);
+      if(Engine.kind==='rtm'){ S.pose=this.adapter; S.poseReady=true; S.poseErr=null; clearBanner(); }
+    }catch(e){ this.err='RTMPoseを準備できませんでした：'+String(e&&e.message||e); this.status(this.err); }
+  },
+  /* 切り出し範囲（画素）。中心と幅・高さ */
+  boxFrom(kp,W,H){
+    const g=kp.filter(k=>k.s>0.3);
+    if(g.length<6) return null;
+    let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+    g.forEach(k=>{x0=Math.min(x0,k.x);y0=Math.min(y0,k.y);x1=Math.max(x1,k.x);y1=Math.max(y1,k.y);});
+    const w=Math.max(x1-x0,0.15*W), h=Math.max(y1-y0,0.15*H);
+    return {cx:(x0+x1)/2, cy:(y0+y1)/2, w:w*1.1, h:h*1.1};   /* 動きの分だけ少し広げる */
+  },
+  async infer(img,W,H,box){
+    if(!this.cv){ this.cv=document.createElement('canvas'); this.cx=this.cv.getContext('2d',{willReadFrequently:true}); }
+    const iw=this.inW, ih=this.inH, cv=this.cv, cx=this.cx;
+    cv.width=iw; cv.height=ih;
+    /* 1.25倍に広げ、縦横比を入力に合わせる */
+    let bw=box.w*1.25, bh=box.h*1.25; const ar=iw/ih;
+    if(bw>bh*ar) bh=bw/ar; else bw=bh*ar;
+    const sx=box.cx-bw/2, sy=box.cy-bh/2;
+    cx.fillStyle='#000'; cx.fillRect(0,0,iw,ih);
+    /* 画面からはみ出す部分は黒で埋める */
+    const cx0=Math.max(0,sx), cy0=Math.max(0,sy), cx1=Math.min(W,sx+bw), cy1=Math.min(H,sy+bh);
+    if(cx1>cx0 && cy1>cy0){
+      const k=iw/bw;
+      cx.drawImage(img,cx0,cy0,cx1-cx0,cy1-cy0,(cx0-sx)*k,(cy0-sy)*k,(cx1-cx0)*k,(cy1-cy0)*k);
+    }
+    const d=cx.getImageData(0,0,iw,ih).data, n=iw*ih, f=new Float32Array(3*n);
+    for(let i=0;i<n;i++){
+      f[i]=(d[i*4]-123.675)/58.395; f[n+i]=(d[i*4+1]-116.28)/57.12; f[2*n+i]=(d[i*4+2]-103.53)/57.375;
+    }
+    const sess=this.session;
+    const out=await sess.run({[sess.inputNames[0]]:new ort.Tensor('float32',f,[1,3,ih,iw])});
+    const ox=out[sess.outputNames[0]], oy=out[sess.outputNames[1]];
+    const K=ox.dims[1], LX=ox.dims[2], LY=oy.dims[2], X=ox.data, Y=oy.data;
+    const kp=[];
+    for(let k=0;k<K;k++){
+      let bx=0,vx=-Infinity,by=0,vy=-Infinity;
+      for(let i=0;i<LX;i++){ const v=X[k*LX+i]; if(v>vx){vx=v;bx=i;} }
+      for(let i=0;i<LY;i++){ const v=Y[k*LY+i]; if(v>vy){vy=v;by=i;} }
+      const px=bx/(LX/iw), py=by/(LY/ih);   /* SimCC の分割比で入力画素へ */
+      kp.push({x:sx+px*bw/iw, y:sy+py*bh/ih, s:Math.min(vx,vy)});
+    }
+    return kp;
+  },
+  /* Halpe26 を MediaPipe の33点の並びに置き換える */
+  toLandmarks(kp,W,H){
+    const vis=s=>Math.max(0,Math.min(1,s/0.6));   /* スコア0.3を信頼度0.5に相当させる */
+    const lm=new Array(33).fill(null).map(()=>({x:NaN,y:NaN,z:0,visibility:0}));
+    Object.keys(HALPE2MP).forEach(h=>{ const k=kp[+h]; if(k) lm[HALPE2MP[h]]={x:k.x/W,y:k.y/H,z:0,visibility:vis(k.s)}; });
+    /* 目の内側・外側は目の点で、口・親指は近くの点で埋める（描画しないよう信頼度0） */
+    const cp=(i,j,v)=>{ lm[i]={x:lm[j].x,y:lm[j].y,z:0,visibility:v===undefined?lm[j].visibility:v}; };
+    cp(1,2,0); cp(3,2,0); cp(4,5,0); cp(6,5,0); cp(9,0,0); cp(10,0,0); cp(21,15,0); cp(22,16,0);
+    /* 手は指の付け根の点がないため、手首から前腕の向きに前腕長の0.5倍延ばした位置を第3中手骨頭とする */
+    [['L',15,13,17,19],['R',16,14,18,20]].forEach(([sd,wr,el,pk,ix])=>{
+      const w=lm[wr], e=lm[el];
+      const p={x:w.x+(w.x-e.x)*0.5, y:w.y+(w.y-e.y)*0.5, z:0, visibility:w.visibility};
+      lm[pk]=Object.assign({},p); lm[ix]=Object.assign({},p);
+    });
+    /* 頭頂（Halpe26 の 17 番）は重心計算で頭部の上端に使う */
+    if(kp[17]) lm.headTop={x:kp[17].x/W, y:kp[17].y/H, visibility:vis(kp[17].s)};
+    return lm;
+  },
+  adapter:{
+    async send({image}){
+      const R=RTM;
+      if(!R.ready) return;
+      const W=image.videoWidth||image.width, H=image.videoHeight||image.height;
+      if(!W||!H) return;
+      /* 動画の巻き戻しや大きな飛びがあったら追跡をやり直す */
+      const t=image.currentTime;
+      if(typeof t==='number'){ if(R.lastT!==null && (t<R.lastT-0.01 || t-R.lastT>1.0)) R.track=null; R.lastT=t; }
+      let kp;
+      if(R.track){
+        kp=await R.infer(image,W,H,R.track);
+        R.track=R.boxFrom(kp,W,H);
+      }
+      if(!R.track){
+        /* 画面全体から探し、見つかった範囲でもう一度推定する */
+        kp=await R.infer(image,W,H,{cx:W/2,cy:H/2,w:W,h:H});
+        const b=R.boxFrom(kp,W,H);
+        if(b){ kp=await R.infer(image,W,H,b); R.track=R.boxFrom(kp,W,H); }
+      }
+      onResults({poseLandmarks:R.toLandmarks(kp,W,H)});
+    }
+  }
+};
+$('rtmFile').addEventListener('change',e=>{ const f=e.target.files&&e.target.files[0]; if(f) RTM.fromFile(f); e.target.value=''; });
+$('rtmClear').addEventListener('click',()=>RTM.clear());
 
 /* ===== カメラ ===== */
 const BAD_RE=/(scanner|mouse|virtual|obs|screen|capture card|droidcam|snap camera|ndi)/i;
@@ -2681,7 +3123,7 @@ async function startCamera(){
       return startCamera();
     }
   }
-  if(!S.poseReady && !S.poseErr) await initPose();
+  if(!S.poseReady) await ensurePose();
   if(S.poseErr) banner('info','<b>骨格検出は無効です（映像のみ表示中）。</b><br>'+S.poseErr); else clearBanner();
   statusLine.textContent='モードを選んで「計測開始」を押してください';
   loop();
@@ -3697,7 +4139,7 @@ function renderWave(){
     waveBody.appendChild(wrap);
     const cap=document.createElement('div'); cap.className='chart-cap';
     cap.innerHTML='<b>重心の軌跡</b><br>'
-      +'Winterの身体分節パラメータ（各部位の質量比と重心位置）から全身の重心を推定し、'
+      +'阿江らの日本人の身体部分係数（各部位の質量比と重心位置、1992）から、左右両側の分節を含めて全身の重心を推定し、'
       +'両足首の中点を原点、肩幅を1とした相対座標で描いています。'
       +'<br>■＝動作の開始点、●＝起立完了（立位到達）の時点です。'
       +'<br>縦の破線が両足首の中点です。左右にどれだけ振れているか、'
@@ -3794,6 +4236,50 @@ const COORD={
     return '画面の左上（MediaPipeの出力のまま。X：左端=0で右へ増える／Y：上端=0で下へ増える）';
   }
 };
+/* 座面高を基準にした重心の位置と移動（cm）。基準が指定されていなければ何も書かない */
+function csvComCm(lines){
+  if(!CAL.ok() || !REC.frames.length) return;
+  const cm=f=>CAL.toCm(f.comX,f.comY,f.signRef);
+  const fr=REC.frames.map(f=>({t:f.t,c:cm(f)})).filter(o=>o.c);
+  if(!fr.length) return;
+  const side=mode!=='front', lab=side?'前後':'左右';
+  const nf=(v,d=1)=>isFinite(v)?v.toFixed(d):'';
+  lines.push('');
+  lines.push('【重心の位置と移動（cm）】');
+  lines.push('長さの基準,椅子の座面高 '+CAL.seat().toFixed(1)+' cm（座面の前の端とその真下の床を映像上で指定）');
+  lines.push('縮尺(cm/画素),'+CAL.k().toFixed(4)+'（基準の長さ '+CAL.pxLen().toFixed(1)+' 画素）');
+  lines.push('原点,座面の前の端の真下の床。高さは上を正、'+(side?'前後は対象者の前方を正':'左右は対象者の左を正'));
+  let path=0; for(let i=1;i<fr.length;i++) path+=Math.hypot(fr[i].c.x-fr[i-1].c.x, fr[i].c.y-fr[i-1].c.y);
+  lines.push('重心の軌跡長（計測全体・cm）,'+path.toFixed(1));
+  const win=(a,b)=>fr.filter(o=>o.t>=a&&o.t<=b);
+  const rows=[], rise=[], fwd=[];
+  REC.reps.forEach((r,i)=>{
+    /* 座位：前の回の立位到達（1回目は計測開始）から座位を離れるまでのあいだで、重心が最も低いコマ */
+    const prevEnd = i>0 ? REC.reps[i-1].upEnd : Math.max(0, r.upStart-2000);
+    const ws=win(prevEnd, r.upStart+50);
+    const w=win(r.upStart, r.upEnd+300);
+    if(!ws.length||!w.length) return;
+    const s0=ws.reduce((a,o)=>o.c.y<a.c.y?o:a,ws[0]);
+    const top=w.reduce((a,o)=>o.c.y>a.c.y?o:a,w[0]);
+    const wu=win(s0.t, r.upEnd);
+    const front= side&&wu.length ? wu.reduce((a,o)=>o.c.x>a.c.x?o:a,wu[0]) : null;
+    const dy=top.c.y-s0.c.y, dx=front?front.c.x-s0.c.x:NaN;
+    rise.push(dy); if(isFinite(dx)) fwd.push(dx);
+    let pl=0; const wp=win(s0.t, r.upEnd); for(let i=1;i<wp.length;i++) pl+=Math.hypot(wp[i].c.x-wp[i-1].c.x, wp[i].c.y-wp[i-1].c.y);
+    rows.push([r.n, nf(s0.c.y), nf(top.c.y), nf(dy), nf(s0.c.x), side?nf(front?front.c.x:NaN):'', side?nf(dx):'', nf(pl)].join(','));
+  });
+  if(rows.length){
+    const m=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:NaN;
+    const sdv=a=>{ if(a.length<2) return NaN; const mm=m(a); return Math.sqrt(a.reduce((s,v)=>s+(v-mm)*(v-mm),0)/(a.length-1)); };
+    lines.push('起立時の重心上昇量 平均(cm),'+nf(m(rise))+',SD,'+nf(sdv(rise)));
+    if(side) lines.push('起立時の重心前方移動量 平均(cm),'+nf(m(fwd))+',SD,'+nf(sdv(fwd)));
+    lines.push('');
+    lines.push(['回','座位の重心高さ(cm)','立位の重心高さ(cm)','上昇量(cm)','座位の重心'+lab+'(cm)',
+                side?'起立中の最も前の位置(cm)':'',side?'前方移動量(cm)':'','起立中の軌跡長(cm)'].join(','));
+    rows.forEach(x=>lines.push(x));
+    lines.push('注記,座位の値は前の回の立位到達から座位を離れるまでで重心が最も低いコマ、立位の高さは立位に到達した0.3秒後までの最大値。前方移動量と軌跡長は座位のコマから立位到達まで。2次元の映像からの推定で、基準と同じ奥行きの面に体があることを前提とする');
+  }
+}
 function csvTimeSeries(){
   const nf=(v,d)=>(typeof v==='number'&&isFinite(v))?v.toFixed(d):'';
   const X=v=>nf(COORD.x(v),5), Y=v=>nf(COORD.y(v),5);
@@ -3801,7 +4287,10 @@ function csvTimeSeries(){
     '肩X','肩Y','股関節X','股関節Y','膝X','膝Y','足首X','足首Y','検出信頼度','使用側',
     '頭部偏位(%)','肩偏位(%)','骨盤偏位(%)','体幹傾き(度)','肩水平傾き(度)',
     '重心X','重心Y','重心相対X(肩幅比)','重心相対Y(肩幅比)','重心速度(肩幅比/秒)',
-    '足首中点X','足首中点Y','尺度(肩幅)'];
+    '足首中点X','足首中点Y','尺度(肩幅)',
+    '左膝関節屈曲角(度)','右膝関節屈曲角(度)','左股関節屈曲角(度)','右股関節屈曲角(度)','左下肢の信頼度','右下肢の信頼度',
+    '重心：信頼度の低い点の数','重心：反対側で代用した点の数',
+    (mode==='front'?'重心 左右(cm)':'重心 前後(cm)'),'重心 高さ(cm)'];
   const lines=[head.join(',')];
   REC.frames.forEach(f=>{
     const r=repOf(f.t);
@@ -3813,7 +4302,10 @@ function csvTimeSeries(){
       f.vis.toFixed(3), f.side==='L'?'左':'右',
       nf(f.headOff,2), nf(f.trunkOff,2), nf(f.pelvisOff,2), nf(f.trunkTilt,2), nf(f.shTilt,2),
       X(f.comX), Y(f.comY), nf(f.comRelX,4), nf(f.comRelY,4), nf(f.comVel,4),
-      X(f.footMidX), Y(f.footMidY), nf(f.scale,5) ].join(','));
+      X(f.footMidX), Y(f.footMidY), nf(f.scale,5),
+      nf(flex(f.kneeL),2), nf(flex(f.kneeR),2), nf(flex(f.hipL),2), nf(flex(f.hipR),2), nf(f.visL,3), nf(f.visR,3),
+      (isFinite(f.comLow)?f.comLow:''), (isFinite(f.comSubst)?f.comSubst:''),
+      ...(()=>{ const c=CAL.toCm(f.comX,f.comY,f.signRef); return c?[c.x.toFixed(2),c.y.toFixed(2)]:['','']; })() ].join(','));
   });
   return lines.join('\n');
 }
@@ -3829,6 +4321,8 @@ function csvSummary(){
   lines.push('年代,'+ageWord());
   lines.push('性別,'+sexWord());
   lines.push('座標の原点（時系列CSV）,'+COORD.label());
+  lines.push('骨格推定,'+String(Engine.label()).replace(/[,\r\n"]/g,' '));
+  lines.push('重心の算出,阿江ら(1992)の身体部分係数（'+sexWord()+'）・左右両側の14分節');
   if(runMode==='ana' && ANA.file){
     lines.push('解析した動画,'+safeName(ANA.file.name));
     lines.push('解析区間（動画時刻・秒）,'+ANA.from.toFixed(2)+'〜'+ANA.to.toFixed(2));
@@ -3881,7 +4375,6 @@ function csvSummary(){
       lines.push(['重心の総移動距離(肩幅比)',path.toFixed(4)].join(','));
       if(REC.reps.length) lines.push(['1回あたりの移動距離(肩幅比)',(path/REC.reps.length).toFixed(4)].join(','));
     }
-    lines.push('重心の推定,Winterの身体分節パラメータによる全身重心');
     lines.push('重心座標の定義,重心X/Yは画面の正規化座標(0-1)。相対X/Yは両足首の中点を原点とし肩幅を1とした比');
   }
   if(typeof Rec!=='undefined' && Rec.lastFile) lines.push('録画ファイル,'+Rec.lastFile.replace(/,/g,' '));
@@ -3890,6 +4383,7 @@ function csvSummary(){
   lines.push('立位しきい値,'+(mode==='side'?'膝屈曲 '+th.standAngle.value+'度以下':th.standRatio.value+'%以上'));
   lines.push('座位しきい値,'+(mode==='side'?'膝屈曲 '+th.sitAngle.value+'度以上':th.sitRatio.value+'%以下'));
   lines.push('角度の表記,伸展位を0度とする屈曲角');
+  csvComCm(lines);
   if(runMode==='ana' && LIGHT.samples.length){
     lines.push('');
     lines.push('【光刺激】');
@@ -3985,7 +4479,7 @@ async function updateDiag(){
     ['video要素','readyState='+video.readyState+' / '+video.videoWidth+'x'+video.videoHeight+(video.paused?' / 一時停止中':' / 再生中'),video.readyState>=2&&!video.paused],
     ['canvas',canvas.width+'x'+canvas.height,canvas.width>1],
     ['描画フレーム数',String(S.frames),S.frames>0],
-    ['MediaPipe',S.poseReady?'動作中 (解析'+S.poseFrames+'フレーム)':(S.poseErr||'未初期化'),S.poseReady],
+    [Engine.label(),S.poseReady?'動作中 (解析'+S.poseFrames+'フレーム)':(S.poseErr||'未初期化'),S.poseReady],
     ['骨格検出',S.lastLandmarks?'検出中':'未検出',!!S.lastLandmarks],
     ['記録フレーム数',String(REC.frames.length),true],
     ['音声合成',Voice.supported?(Voice.chosen?Voice.chosen.name:'音声リスト取得中'):'非対応',Voice.supported]
@@ -4042,7 +4536,14 @@ Rec.updateHint();
 renderRepTable();
 EX.init();
 applyRunMode();
-initPose();
+(function(){
+  let k='mp'; try{ k=localStorage.getItem('cs30-engine')||'mp'; }catch(e){}
+  Engine.kind = (k==='rtm')?'rtm':'mp';
+  document.querySelectorAll('.eng-btn').forEach(b=>b.classList.toggle('active',b.dataset.engine===Engine.kind));
+  $('rtmBox').style.display=(Engine.kind==='rtm' && runMode!=='rec')?'block':'none';
+  initPose();            /* MediaPipe はいつでも切り替えられるよう先に用意しておく */
+  ensurePose();
+})();
 
 })();
 </script>

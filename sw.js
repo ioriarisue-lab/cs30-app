@@ -3,9 +3,10 @@
    1) アプリ本体をキャッシュしてオフラインでも起動できるようにする
    2) MediaPipe の配信ファイル（CDN）を初回取得時にキャッシュし、2回目以降は通信なしで動くようにする
    3) PWA としてインストール可能にする（fetch ハンドラが必須のため）
+   RTMPose のモデルはページ側で 'cs30-models' に保存する。版を上げても消さない。
 */
 
-const VERSION = 'cs30-v1.7.1';
+const VERSION = 'cs30-v1.10.0';
 const SHELL_CACHE = 'shell-' + VERSION;
 const CDN_CACHE   = 'cdn-' + VERSION;
 
@@ -36,7 +37,7 @@ self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
     await Promise.all(keys.map(k => {
-      if (k !== SHELL_CACHE && k !== CDN_CACHE) return caches.delete(k);
+      if (k !== SHELL_CACHE && k !== CDN_CACHE && k !== 'cs30-models') return caches.delete(k);
     }));
     await self.clients.claim();
   })());
@@ -78,6 +79,8 @@ self.addEventListener('fetch', event => {
 
   /* 自サイト内 */
   if (url.origin === self.location.origin) {
+    /* RTMPose のモデル（models/）はページ側で保存するので、ここでは二重に保存しない */
+    if (url.pathname.includes('/models/')) return;
     /* HTML はネット優先（更新をすぐ反映）、失敗したらキャッシュ */
     const isDoc = req.mode === 'navigate' ||
                   (req.headers.get('accept') || '').includes('text/html');
